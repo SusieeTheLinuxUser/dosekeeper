@@ -1,0 +1,92 @@
+import 'package:flutter/material.dart';
+
+import 'data/database.dart';
+import 'services/scheduler.dart';
+import 'ui/medications_page.dart';
+import 'ui/today_page.dart';
+
+void main() => runApp(const DoseKeeperApp());
+
+class DoseKeeperApp extends StatelessWidget {
+  const DoseKeeperApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'DoseKeeper',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF6EE7A8),
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
+        ),
+        home: const HomeShell(),
+      );
+}
+
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key});
+  @override
+  State<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
+  final _scheduler = DoseScheduler(DoseDatabase.instance);
+  final _todayKey = GlobalKey<TodayPageState>();
+  final _medsKey = GlobalKey<MedicationsPageState>();
+  int _tab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Alarms fire while the app is closed, so the Today view can be stale whenever
+  /// the user comes back. Re-sync on every resume.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _todayKey.currentState?.refresh();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = [
+      TodayPage(key: _todayKey, scheduler: _scheduler),
+      MedicationsPage(
+        key: _medsKey,
+        scheduler: _scheduler,
+        onChanged: () => _todayKey.currentState?.refresh(),
+      ),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('DoseKeeper')),
+      body: IndexedStack(index: _tab, children: pages),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) {
+          setState(() => _tab = i);
+          if (i == 0) _todayKey.currentState?.refresh();
+          if (i == 1) _medsKey.currentState?.refresh();
+        },
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.today), label: 'Today'),
+          NavigationDestination(
+            icon: Icon(Icons.medication_outlined),
+            label: 'Medications',
+          ),
+        ],
+      ),
+    );
+  }
+}

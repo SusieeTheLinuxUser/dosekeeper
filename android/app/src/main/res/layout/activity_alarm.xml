@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#12141C"
+    android:padding="32dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="TIME FOR YOUR MEDS"
+        android:textColor="#8B93A7"
+        android:textSize="14sp"
+        android:letterSpacing="0.15"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/alarm_med_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#FFFFFF"
+        android:textSize="40sp"
+        android:textStyle="bold"
+        android:gravity="center" />
+
+    <TextView
+        android:id="@+id/alarm_dosage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#9FB4FF"
+        android:textSize="22sp"
+        android:layout_marginTop="8dp" />
+
+    <Button
+        android:id="@+id/alarm_taken"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:layout_marginTop="56dp"
+        android:text="TAKEN"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#0B1020"
+        android:backgroundTint="#6EE7A8" />
+
+    <Button
+        android:id="@+id/alarm_snooze"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_marginTop="16dp"
+        android:text="SNOOZE 10 MIN"
+        android:textSize="16sp"
+        android:textColor="#C9D2E8"
+        android:backgroundTint="#232838" />
+
+</LinearLayout>
