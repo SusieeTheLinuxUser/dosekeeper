@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'data/database.dart';
 import 'services/alarm_bridge.dart';
 import 'services/scheduler.dart';
 import 'ui/medications_page.dart';
@@ -34,7 +33,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
-  final _scheduler = DoseScheduler(DoseDatabase.instance);
+  final _scheduler = DoseScheduler();
   final _todayKey = GlobalKey<TodayPageState>();
   final _medsKey = GlobalKey<MedicationsPageState>();
   int _tab = 0;

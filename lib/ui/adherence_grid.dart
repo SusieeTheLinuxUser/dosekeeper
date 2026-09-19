@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 /// GitHub-style contribution grid: one column per week, one row per weekday,
 /// coloured by how many of that day's doses were taken.
@@ -83,6 +84,5 @@ class AdherenceGrid extends StatelessWidget {
       DateTime(day.year, day.month, day.day)
           .subtract(Duration(days: day.weekday - 1));
 
-  static String _fmt(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  static String _fmt(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 }

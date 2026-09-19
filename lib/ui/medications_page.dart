@@ -102,10 +102,7 @@ class MedicationsPageState extends State<MedicationsPage> {
   }
 
   static String _describe(Medication med) {
-    final times = med.timesOfDay
-        .map((m) =>
-            '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}')
-        .join(', ');
+    final times = med.timesOfDay.map(Medication.formatTime).join(', ');
     final everyDay = med.daysOfWeek.length == 7;
     const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final days = everyDay

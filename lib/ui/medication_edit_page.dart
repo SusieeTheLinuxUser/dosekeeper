@@ -113,7 +113,7 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
               children: [
                 for (final m in _times)
                   InputChip(
-                    label: Text(_fmt(m)),
+                    label: Text(Medication.formatTime(m)),
                     onDeleted: () => setState(() => _times = [..._times]..remove(m)),
                   ),
                 ActionChip(
@@ -148,11 +148,5 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
         ),
       ),
     );
-  }
-
-  static String _fmt(int minutes) {
-    final h = (minutes ~/ 60).toString().padLeft(2, '0');
-    final m = (minutes % 60).toString().padLeft(2, '0');
-    return '$h:$m';
   }
 }

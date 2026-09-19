@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 /// A medication the user takes on a repeating schedule.
 class Medication {
   const Medication({
@@ -26,6 +28,10 @@ class Medication {
   static const everyDay = {1, 2, 3, 4, 5, 6, 7};
 
   bool occursOn(DateTime day) => daysOfWeek.contains(day.weekday);
+
+  /// Formats "minutes past midnight" as e.g. "09:00".
+  static String formatTime(int minutes) =>
+      DateFormat('HH:mm').format(DateTime(2000, 1, 1, 0, minutes));
 
   Medication copyWith({
     int? id,
