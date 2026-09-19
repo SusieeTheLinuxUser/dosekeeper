@@ -54,9 +54,9 @@ Requires the Android SDK and Flutter 3.x.
 
 ## Status
 
-Early. The alarm pipeline is implemented but **verify it on your own device before
-relying on it** — use a test alarm, lock your phone, and confirm it wakes you.
-Don't drop your existing reminders until you've proven it works for you.
+Early. A test alarm has rung once on real hardware, screen-on and locked, and it worked.
+That's one data point, not proof — **verify it on your own device before relying on it**,
+including at least one overnight test, before you drop your existing reminders.
 
 ## Licence
 

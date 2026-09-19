@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'data/database.dart';
+import 'services/alarm_bridge.dart';
 import 'services/scheduler.dart';
 import 'ui/medications_page.dart';
 import 'ui/today_page.dart';
@@ -70,7 +72,19 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('DoseKeeper')),
+      appBar: AppBar(
+        title: const Text('DoseKeeper'),
+        actions: [
+          // Fires a real alarm through the real pipeline, to verify it rings on
+          // this device. Debug builds only -- not something a user should need.
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'Test alarm (10s)',
+              icon: const Icon(Icons.alarm_add),
+              onPressed: () => AlarmBridge.testAlarm(10),
+            ),
+        ],
+      ),
       body: IndexedStack(index: _tab, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
