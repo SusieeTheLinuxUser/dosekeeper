@@ -122,6 +122,19 @@ class DoseDatabase {
     );
   }
 
+  /// Still-pending doses whose scheduled time has already passed. The caller decides
+  /// how much grace to allow before treating one as missed.
+  Future<List<Dose>> pendingDosesBefore(DateTime cutoff) async {
+    final db = await database;
+    final rows = await db.query(
+      'doses',
+      where: 'scheduled_at < ? AND status = ?',
+      whereArgs: [cutoff.millisecondsSinceEpoch, DoseStatus.pending.name],
+      orderBy: 'scheduled_at',
+    );
+    return rows.map(Dose.fromRow).toList();
+  }
+
   /// Doses still in the future, used to arm native alarms.
   Future<List<Dose>> upcomingPendingDoses(DateTime now, DateTime until) async {
     final db = await database;

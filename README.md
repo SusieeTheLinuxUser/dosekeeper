@@ -39,8 +39,10 @@ See [dontkillmyapp.com](https://dontkillmyapp.com) for per-manufacturer steps.
 - Doses marked taken/skipped, with missed doses detected after a grace period
 - Everything stored locally in SQLite
 
-Planned: a GitHub-style adherence grid, dose history view, persistent ongoing
-notification for outstanding doses.
+- Persistent, undismissable notification for any dose still outstanding past its
+  grace period, so it can't be swiped away and forgotten
+
+Planned: a GitHub-style adherence grid, dose history view.
 
 ## Building
 

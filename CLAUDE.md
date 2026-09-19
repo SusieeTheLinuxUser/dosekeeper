@@ -61,6 +61,17 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
 - **Self-diagnosis** — Today screen warns if exact alarms are blocked, battery
   optimisation is on, or notification permission is denied, with one-tap links to the
   system settings/dialogs that fix each.
+- **Persistent missed-dose notification** (`OutstandingNotifier.kt`, `DoseScheduler._updateOutstandingNotification`)
+  — an ongoing, non-swipeable notification (separate channel from the ringing alarm,
+  no sound) that shows whenever any dose is past its 2h missed-grace period and still
+  pending. Recomputed on every `sync()` call (app open, resume, after saving a med, after
+  marking a dose), so it clears itself once the dose is marked taken/skipped. Verified on
+  device by inserting a fake overdue dose directly into the SQLite DB: notification
+  appeared with the right medication name, survived a swipe-to-dismiss gesture, and
+  cleared once the fake row was removed. Known gap: only updates when the app actually
+  runs some code (open/resume) — there's no background job keeping it fresh purely from
+  time passing while the app sits closed. Acceptable for now since the ringing alarm is
+  the primary mechanism; this is the backstop for after that's been seen and ignored/missed.
 - **Debug test-alarm button** — app bar, `kDebugMode`-gated only, confirm-dialog gated
   too. Fires a real alarm N seconds out through the actual `setAlarmClock` pipeline.
   Use this for every future hardware check instead of waiting on a real medication's
@@ -73,11 +84,9 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
 
 ### Not implemented yet
 
-1. **Persistent ongoing notification** — user explicitly asked for this: an undismissable
-   notification so an outstanding/missed dose can't be swiped away and forgotten.
-2. **GitHub-style adherence grid** — user's "silly" idea, genuinely wanted. `DoseDatabase.dailyAdherence()`
+1. **GitHub-style adherence grid** — user's "silly" idea, genuinely wanted. `DoseDatabase.dailyAdherence()`
    already returns per-day taken/total, so the data layer is ready; only the widget is missing.
-3. Dose history screen; editing/pausing a med without deleting it; export.
+2. Dose history screen; editing/pausing a med without deleting it; export.
 
 ## Best next move
 

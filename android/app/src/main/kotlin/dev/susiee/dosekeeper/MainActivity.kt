@@ -126,6 +126,22 @@ class MainActivity : FlutterActivity() {
                         result.success(needs)
                     }
 
+                    /** An overdue dose exists -- show/update the undismissable reminder. */
+                    "updateOutstandingNotification" -> {
+                        OutstandingNotifier.show(
+                            this,
+                            title = call.argument<String>("title") ?: "Missed dose",
+                            text = call.argument<String>("text") ?: "",
+                        )
+                        result.success(true)
+                    }
+
+                    /** No more overdue doses -- clear the reminder. */
+                    "clearOutstandingNotification" -> {
+                        OutstandingNotifier.clear(this)
+                        result.success(true)
+                    }
+
                     /** Fire a test alarm N seconds out, to prove the pipeline end to end. */
                     "testAlarm" -> {
                         val seconds = (call.argument<Number>("seconds") ?: 10).toLong()

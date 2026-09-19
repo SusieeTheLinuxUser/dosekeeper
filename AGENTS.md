@@ -35,13 +35,14 @@ Each of those exists to survive Doze, App Standby, and OEM battery managers.
 
 - Implemented: native alarm pipeline, med CRUD (multi-time, per-weekday), today's doses,
   taken/skipped/missed, SQLite persistence, permission self-diagnosis on the Today screen
-  (exact alarm, battery optimisation, notification permission), debug test-alarm button.
+  (exact alarm, battery optimisation, notification permission), debug test-alarm button,
+  persistent ongoing "missed dose" notification (undismissable, clears on taken/skipped).
 - Passing: `flutter analyze` clean, 5 unit tests, debug APK builds, installed on the phone.
 - **Verified once on hardware (2026-09-19):** screen-on and locked-screen full-screen-alarm
   tests both passed manually. **Still unverified: an overnight test.** Top priority — see
   `CLAUDE.md` "Best next move".
-- Not built yet: persistent ongoing notification (explicitly requested), GitHub-style
-  adherence grid (data layer ready via `DoseDatabase.dailyAdherence()`), history screen.
+- Not built yet: GitHub-style adherence grid (data layer ready via
+  `DoseDatabase.dailyAdherence()`), history screen.
 
 ## Safety and honesty
 

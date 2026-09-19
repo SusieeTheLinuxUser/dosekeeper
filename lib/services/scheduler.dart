@@ -23,6 +23,32 @@ class DoseScheduler {
 
     await _materialiseDoses(meds, start);
     await _armAlarms(meds, start);
+    await _updateOutstandingNotification(start);
+  }
+
+  /// Doses that rang (or should have) and were never acted on shouldn't just vanish
+  /// once the alarm stops -- keep an ongoing, undismissable notification up for them
+  /// until they're marked taken or skipped.
+  Future<void> _updateOutstandingNotification(DateTime now) async {
+    final overdue = (await _db.pendingDosesBefore(now))
+        .where((d) => d.effectiveStatus(now) == DoseStatus.missed)
+        .toList();
+
+    if (overdue.isEmpty) {
+      await AlarmBridge.clearOutstandingNotification();
+      return;
+    }
+
+    final meds = {for (final m in await _db.medications()) m.id: m};
+    final names = overdue
+        .map((d) => meds[d.medicationId]?.name)
+        .whereType<String>()
+        .toSet()
+        .join(', ');
+    await AlarmBridge.updateOutstandingNotification(
+      title: overdue.length == 1 ? '1 dose missed' : '${overdue.length} doses missed',
+      text: names,
+    );
   }
 
   Future<void> _materialiseDoses(List<Medication> meds, DateTime now) async {
