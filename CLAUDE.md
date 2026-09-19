@@ -94,6 +94,36 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
 
 1. Dose history screen; editing/pausing a med without deleting it; export.
 
+### Future feature ideas (not prioritized, not committed to)
+
+Reliability-adjacent — fits the core mission, worth doing before pure nice-to-haves:
+- **Taken/Skip action buttons directly on the missed-dose notification** — right now
+  clearing it means opening the app; a notification action would let you resolve it
+  from the lock screen, same spirit as the alarm screen itself.
+- **Low-battery warning on the Today screen** — same self-diagnosis pattern as the
+  existing exact-alarm/battery-optimisation/notification-permission checks. A dead
+  phone can't ring, and that's a failure mode entirely outside the alarm pipeline.
+- **Gradually-increasing alarm volume** for heavy sleepers who sleep through a flat tone.
+
+Quality of life:
+- **Surface the `notes` field** — it already exists on `Medication` and round-trips
+  through the DB, but nothing in the edit UI lets you set it or shows it anywhere
+  (e.g. "take with food"). Cheapest item on this list; the model already supports it.
+- **"As-needed" (PRN) medications** — no fixed schedule, just a manual log button for
+  ad hoc doses. Common for real regimens (e.g. pain relief) that the current
+  fixed-time/fixed-weekday model can't represent at all.
+- **Adjustable snooze length** — hardcoded to 10 minutes in `AlarmActivity.SNOOZE_MS`.
+- **Home-screen widget** showing the next dose at a glance.
+
+Data ownership — fits "no account, no server":
+- **Local export/import** (JSON or CSV) so switching phones doesn't mean starting over.
+  A file the user controls, not a cloud account — stays consistent with the app's whole
+  premise.
+
+Deliberately NOT pursuing: multi-user profiles, cloud sync, SMS/email backup
+notifications, anything else that needs a network permission or an account. Those
+fight the "no account, no server" identity of the app, not just add scope.
+
 ## Best next move
 
 **Run an overnight test before anything else.** Screen-on and locked-screen tests both
