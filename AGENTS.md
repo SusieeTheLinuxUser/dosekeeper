@@ -54,8 +54,10 @@ Each of those exists to survive Doze, App Standby, and OEM battery managers.
 
 ## Working conventions
 
-- Repo is local-only so far (`git log` has the initial commit); **not pushed to a remote yet**.
-  Ask before creating/pushing to a public remote.
+- Remote is `https://github.com/SusieeTheLinuxUser/dosekeeper` (public). **`master` is
+  branch-protected: direct pushes are rejected.** Work on a feature/fix branch, push it,
+  open a PR (`gh pr create`), wait for CI (analyze + test + debug APK build) to pass, then
+  merge (`gh pr merge --merge`). This applies to every session/agent, not just this one.
 - Update `CLAUDE.md` and this file after any meaningful chunk of work — the user switches
   between Claude, ChatGPT/Codex, Qwen, Kimi and Z.ai, and these files are the only continuity.
 - Non-trivial logic gets a test. `flutter test` runs them; no device needed.
