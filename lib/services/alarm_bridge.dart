@@ -32,8 +32,21 @@ class AlarmBridge {
   static Future<void> requestIgnoreBatteryOptimizations() =>
       _channel.invokeMethod('requestIgnoreBatteryOptimizations');
 
+  /// Without this, the alarm's full-screen lockscreen takeover silently never fires
+  /// (the OS drops the notification it rides on) even though the alarm still rings.
+  static Future<bool> hasNotificationPermission() async =>
+      await _channel.invokeMethod<bool>('hasNotificationPermission') ?? false;
+
+  static Future<void> requestNotificationPermission() =>
+      _channel.invokeMethod('requestNotificationPermission');
+
   static Future<bool> consumeNeedsReschedule() async =>
       await _channel.invokeMethod<bool>('consumeNeedsReschedule') ?? false;
+
+  /// Fires a real alarm N seconds out, through the exact same pipeline as a real
+  /// dose, to prove end-to-end that it rings on this device.
+  static Future<void> testAlarm(int seconds) =>
+      _channel.invokeMethod('testAlarm', {'seconds': seconds});
 
   /// Outcomes the native alarm screen recorded while Dart was not running.
   static Future<List<PendingAlarmAction>> drainPendingActions() async {

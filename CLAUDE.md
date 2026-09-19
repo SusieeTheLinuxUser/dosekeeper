@@ -17,13 +17,27 @@ That origin is the whole design rationale. **A medication reminder that doesn't 
 is worse than none, because the user trusted it.** Reliability is the product, not a
 feature. Do not trade it away for elegance or convenience.
 
-## Current state (2026-09-20)
+## Current state (2026-09-19)
 
 Built, committed locally (**not yet pushed to any remote**), installed on the user's phone.
 
 - `flutter analyze` clean, 5 unit tests passing, debug APK builds and installs.
-- **NOTHING HAS BEEN VERIFIED ON HARDWARE YET.** The alarm has never actually rung.
-  This is the single most important open item.
+- **First real hardware alarm confirmed.** Added a debug-only "Test alarm (10s)" button
+  (`AlarmBridge.testAlarm`, wired to the native `testAlarm` handler that already existed
+  in `MainActivity.kt` but had no caller) and fired it through the real
+  `AlarmManager.setAlarmClock()` path while the phone was locked. User confirmed: screen
+  woke, full-screen alarm took over the lockscreen, audio played, Taken button worked.
+  **Still needed before trusting it day-to-day: an overnight test.** One successful manual
+  trigger is not the same as surviving ColorOS's background killer over hours asleep.
+- **Bug found and fixed during this test:** the manifest declared `POST_NOTIFICATIONS`
+  but nothing ever requested it at runtime (dangerous permission on API 33+). Without it
+  the OS silently dropped the notification the full-screen intent rides on — audio still
+  played (independent MediaPlayer path) but the lockscreen takeover would have silently
+  failed. Added `hasNotificationPermission`/`requestNotificationPermission` to
+  `MainActivity.kt` + `AlarmBridge`, and a Today-screen warning banner matching the
+  existing exact-alarm/battery-optimisation pattern. This was a real silent-failure gap,
+  exactly the class of bug this project exists to catch — glad we tested before relying
+  on it.
 
 ### Implemented
 
@@ -44,8 +58,12 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
   `data/database.dart` (SQLite), `services/scheduler.dart` (materialises doses 3 days ahead,
   arms alarms, drains native outcomes), `services/alarm_bridge.dart`, and UI
   (`today_page`, `medications_page`, `medication_edit_page`).
-- **Self-diagnosis** — Today screen warns if exact alarms are blocked or battery
-  optimisation is on, with one-tap links to the system settings that fix it.
+- **Self-diagnosis** — Today screen warns if exact alarms are blocked, battery
+  optimisation is on, or notification permission is denied, with one-tap links to the
+  system settings/dialogs that fix each.
+- **Debug test-alarm button** — app bar, `kDebugMode`-gated only. Fires a real alarm
+  N seconds out through the actual `setAlarmClock` pipeline. Use this for every
+  future hardware check instead of waiting on a real medication's scheduled time.
 
 ### Not implemented yet
 
@@ -57,11 +75,12 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
 
 ## Best next move
 
-**Verify a real alarm fires on the physical phone, before anything else.** The phone
-(`3B164300A9900000`) is connected via adb and the app is installed. Open the app, grant
-both permission warnings, then test: ring in 10s with the screen on, then ring in 60s
-with the phone **locked**, then ideally an overnight test. Only after that should
-features get added.
+**Run an overnight test before anything else.** Screen-on and locked-screen tests both
+passed manually (2026-09-19, see above). What's unproven is survival over hours of Doze
+while asleep — the actual failure mode that started this project. Use the debug test-alarm
+button to set one for tomorrow morning, or schedule a real medication dose, then leave the
+phone alone overnight exactly as the user normally would (not plugged in and staring at
+it). Only after that should new features get added.
 
 Then: persistent notification, then the activity grid.
 

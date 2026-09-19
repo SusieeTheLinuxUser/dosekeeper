@@ -20,6 +20,7 @@ class TodayPageState extends State<TodayPage> {
   bool _loading = true;
   bool _exactOk = true;
   bool _batteryOk = true;
+  bool _notificationsOk = true;
 
   @override
   void initState() {
@@ -38,6 +39,7 @@ class TodayPageState extends State<TodayPage> {
 
     final exact = await AlarmBridge.canScheduleExact();
     final battery = await AlarmBridge.isIgnoringBatteryOptimizations();
+    final notifications = await AlarmBridge.hasNotificationPermission();
 
     if (!mounted) return;
     setState(() {
@@ -48,6 +50,7 @@ class TodayPageState extends State<TodayPage> {
       ];
       _exactOk = exact;
       _batteryOk = battery;
+      _notificationsOk = notifications;
       _loading = false;
     });
   }
@@ -67,6 +70,17 @@ class TodayPageState extends State<TodayPage> {
 
     final now = DateTime.now();
     final warnings = <Widget>[
+      if (!_notificationsOk)
+        _Warning(
+          text: 'Notifications are off. The alarm will ring but won\'t take '
+              'over the lockscreen.',
+          actionLabel: 'Fix',
+          onAction: () async {
+            await AlarmBridge.requestNotificationPermission();
+            await Future<void>.delayed(const Duration(seconds: 1));
+            await refresh();
+          },
+        ),
       if (!_exactOk)
         _Warning(
           text: 'Exact alarms are blocked. Alarms may not ring on time.',

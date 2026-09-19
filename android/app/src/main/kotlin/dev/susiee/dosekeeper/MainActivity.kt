@@ -1,11 +1,15 @@
 package dev.susiee.dosekeeper
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -60,6 +64,34 @@ class MainActivity : FlutterActivity() {
                             Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                                 .setData(Uri.parse("package:$packageName")),
                         )
+                        result.success(true)
+                    }
+
+                    /**
+                     * POST_NOTIFICATIONS is a dangerous runtime permission on API 33+. Declaring
+                     * it in the manifest grants nothing -- without this the OS silently drops the
+                     * foreground-service notification, which silently drops the full-screen
+                     * intent with it. The alarm still rings (audio is independent), but the
+                     * lockscreen takeover never happens. Below 33 the permission does not exist
+                     * and notifications are allowed by default.
+                     */
+                    "hasNotificationPermission" -> {
+                        val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                            ContextCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            ) == PackageManager.PERMISSION_GRANTED
+                        result.success(granted)
+                    }
+
+                    "requestNotificationPermission" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            ActivityCompat.requestPermissions(
+                                this,
+                                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                                0,
+                            )
+                        }
                         result.success(true)
                     }
 
