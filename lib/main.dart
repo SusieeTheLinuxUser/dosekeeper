@@ -77,11 +77,32 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         actions: [
           // Fires a real alarm through the real pipeline, to verify it rings on
           // this device. Debug builds only -- not something a user should need.
+          // Confirms first: this sits on the app bar on every screen, and an
+          // accidental tap would otherwise fire a real ringing alarm unprompted.
           if (kDebugMode)
             IconButton(
               tooltip: 'Test alarm (10s)',
               icon: const Icon(Icons.alarm_add),
-              onPressed: () => AlarmBridge.testAlarm(10),
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Fire test alarm?'),
+                    content: const Text('Rings for real in 10 seconds.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Fire'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) await AlarmBridge.testAlarm(10);
+              },
             ),
         ],
       ),
