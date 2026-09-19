@@ -160,6 +160,9 @@ class DoseDatabase {
     final now = DateTime.now();
     final out = <DateTime, ({int taken, int total})>{};
     for (final d in doses) {
+      // A dose that hasn't reached its scheduled time yet isn't missed or taken --
+      // it just hasn't happened. Don't let it drag today's ratio down before it's due.
+      if (d.scheduledAt.isAfter(now)) continue;
       final day = DateTime(d.scheduledAt.year, d.scheduledAt.month, d.scheduledAt.day);
       final prev = out[day] ?? (taken: 0, total: 0);
       final counted = d.effectiveStatus(now) == DoseStatus.taken;

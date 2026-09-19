@@ -41,8 +41,9 @@ See [dontkillmyapp.com](https://dontkillmyapp.com) for per-manufacturer steps.
 
 - Persistent, undismissable notification for any dose still outstanding past its
   grace period, so it can't be swiped away and forgotten
+- A GitHub-style adherence grid on the Today screen
 
-Planned: a GitHub-style adherence grid, dose history view.
+Planned: a dose history view, editing/pausing a medication without deleting it, export.
 
 ## Building
 

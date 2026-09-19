@@ -72,6 +72,14 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
   runs some code (open/resume) — there's no background job keeping it fresh purely from
   time passing while the app sits closed. Acceptable for now since the ringing alarm is
   the primary mechanism; this is the backstop for after that's been seen and ignored/missed.
+- **GitHub-style adherence grid** (`lib/ui/adherence_grid.dart`) — on the Today screen,
+  above the dose list. One column per week, one row per weekday, coloured by taken/total
+  for that day (grey = no dose that day, red = fully missed, green shades = partial-to-full).
+  Fixed a real bug while building it: `DoseDatabase.dailyAdherence()` counted a dose in a
+  day's total the instant it was scheduled, before its time arrived -- so today showed
+  solid red at 00:19 for doses due at 09:00 that hadn't happened yet. Fixed by excluding
+  doses whose `scheduledAt` is still in the future from the count entirely. Caught by
+  actually looking at a screenshot from the device, not just `flutter analyze`/`test`.
 - **Debug test-alarm button** — app bar, `kDebugMode`-gated only, confirm-dialog gated
   too. Fires a real alarm N seconds out through the actual `setAlarmClock` pipeline.
   Use this for every future hardware check instead of waiting on a real medication's
@@ -84,9 +92,7 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
 
 ### Not implemented yet
 
-1. **GitHub-style adherence grid** — user's "silly" idea, genuinely wanted. `DoseDatabase.dailyAdherence()`
-   already returns per-day taken/total, so the data layer is ready; only the widget is missing.
-2. Dose history screen; editing/pausing a med without deleting it; export.
+1. Dose history screen; editing/pausing a med without deleting it; export.
 
 ## Best next move
 

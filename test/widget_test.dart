@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dosekeeper/models/medication.dart';
+import 'package:dosekeeper/ui/adherence_grid.dart';
 
 void main() {
   group('Medication', () {
@@ -65,6 +66,20 @@ void main() {
         dose.effectiveStatus(scheduled.add(const Duration(days: 5))),
         DoseStatus.taken,
       );
+    });
+  });
+
+  group('AdherenceGrid.mondayOf', () {
+    test('steps back to Monday from mid-week', () {
+      expect(AdherenceGrid.mondayOf(DateTime(2026, 9, 24)), DateTime(2026, 9, 21)); // Thu -> Mon
+    });
+
+    test('leaves a Monday unchanged', () {
+      expect(AdherenceGrid.mondayOf(DateTime(2026, 9, 21)), DateTime(2026, 9, 21));
+    });
+
+    test('steps back across a month boundary from Sunday', () {
+      expect(AdherenceGrid.mondayOf(DateTime(2026, 10, 4)), DateTime(2026, 9, 28)); // Sun -> Mon
     });
   });
 }
