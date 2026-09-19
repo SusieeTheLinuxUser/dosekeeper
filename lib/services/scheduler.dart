@@ -7,9 +7,7 @@ import 'alarm_bridge.dart';
 /// Doses are materialised into the database rather than computed on the fly so that
 /// history, "taken" marks and the activity grid all have something stable to point at.
 class DoseScheduler {
-  DoseScheduler(this._db);
-
-  final DoseDatabase _db;
+  final _db = DoseDatabase.instance;
 
   /// How far ahead to materialise doses and arm alarms. Android tolerates a few dozen
   /// pending alarms comfortably; this keeps us well inside that.
