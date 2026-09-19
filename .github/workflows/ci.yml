@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: 'stable'
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      # Catches native Kotlin build breakage that analyze/test can't see.
+      - run: flutter build apk --debug
