@@ -163,3 +163,23 @@ Then: persistent notification, then the activity grid.
 - Non-trivial logic gets a test (`test/widget_test.dart` covers the scheduling maths).
 - Keep the native alarm layer commented with *why*, not what — the "why" is what stops
   a future contributor refactoring the reliability out of it.
+
+## Git workflow
+
+Remote: `https://github.com/SusieeTheLinuxUser/dosekeeper` (public, MIT).
+
+**`master` is branch-protected as of 2026-09-20:** PR required to merge, CI (`.github/workflows/ci.yml`:
+`flutter analyze` + `flutter test` + `flutter build apk --debug`) must pass, force-push and
+branch deletion blocked, enforced for admins too — so this applies even to the repo owner,
+not just outside contributors. Direct `git push origin <branch>:master` will be rejected.
+
+Normal flow for any change, agent or human:
+1. Branch off `master`: `git checkout -b <kind>/<short-description>`.
+2. Commit, push: `git push -u origin <branch>`.
+3. `gh pr create --base master`.
+4. Wait for the CI check to pass on the PR.
+5. `gh pr merge --merge` (or ask the user to click merge on GitHub).
+
+No required review count is set (solo maintainer) — the PR + passing CI is the gate, not a
+second pair of eyes. Don't add required reviewers, CODEOWNERS, or multi-environment deploy
+stages; this is a one-person open-source project, not a team repo.
