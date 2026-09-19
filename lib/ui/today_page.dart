@@ -5,6 +5,7 @@ import '../data/database.dart';
 import '../models/medication.dart';
 import '../services/alarm_bridge.dart';
 import '../services/scheduler.dart';
+import 'adherence_grid.dart';
 
 class TodayPage extends StatefulWidget {
   const TodayPage({super.key, required this.scheduler});
@@ -21,6 +22,7 @@ class TodayPageState extends State<TodayPage> {
   bool _exactOk = true;
   bool _batteryOk = true;
   bool _notificationsOk = true;
+  Map<DateTime, ({int taken, int total})> _adherence = {};
 
   @override
   void initState() {
@@ -40,6 +42,10 @@ class TodayPageState extends State<TodayPage> {
     final exact = await AlarmBridge.canScheduleExact();
     final battery = await AlarmBridge.isIgnoringBatteryOptimizations();
     final notifications = await AlarmBridge.hasNotificationPermission();
+    final adherence = await _db.dailyAdherence(
+      start.subtract(const Duration(days: 26 * 7)),
+      start.add(const Duration(days: 1)),
+    );
 
     if (!mounted) return;
     setState(() {
@@ -51,6 +57,7 @@ class TodayPageState extends State<TodayPage> {
       _exactOk = exact;
       _batteryOk = battery;
       _notificationsOk = notifications;
+      _adherence = adherence;
       _loading = false;
     });
   }
@@ -115,6 +122,8 @@ class TodayPageState extends State<TodayPage> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 16),
+          AdherenceGrid(data: _adherence, today: DateTime(now.year, now.month, now.day)),
+          const SizedBox(height: 20),
           if (_items.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 60),
