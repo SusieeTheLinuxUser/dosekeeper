@@ -61,9 +61,15 @@ Built, committed locally (**not yet pushed to any remote**), installed on the us
 - **Self-diagnosis** — Today screen warns if exact alarms are blocked, battery
   optimisation is on, or notification permission is denied, with one-tap links to the
   system settings/dialogs that fix each.
-- **Debug test-alarm button** — app bar, `kDebugMode`-gated only. Fires a real alarm
-  N seconds out through the actual `setAlarmClock` pipeline. Use this for every
-  future hardware check instead of waiting on a real medication's scheduled time.
+- **Debug test-alarm button** — app bar, `kDebugMode`-gated only, confirm-dialog gated
+  too. Fires a real alarm N seconds out through the actual `setAlarmClock` pipeline.
+  Use this for every future hardware check instead of waiting on a real medication's
+  scheduled time. Confirmation dialog added after a scare: it sits on the shared app
+  bar on every screen, and on this phone a tap of it got delayed by ColorOS's own
+  alarm helper (`OplusAlarmManagerServiceHelper`) and fired minutes later, coinciding
+  with the user adding a real medication and looking like the add flow itself was
+  ringing alarms. It wasn't (verified via the on-device DB) — but an unconfirmed,
+  always-visible "fire a real alarm" button was a real foot-gun regardless.
 
 ### Not implemented yet
 
