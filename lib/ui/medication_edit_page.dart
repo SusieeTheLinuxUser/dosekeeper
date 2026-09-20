@@ -126,18 +126,21 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
             const SizedBox(height: 28),
             Text('Days', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                for (var d = 1; d <= 7; d++)
-                  ChoiceChip(
-                    label: Text(dayLabels[d - 1]),
-                    selected: _days.contains(d),
-                    onSelected: (sel) => setState(() {
-                      sel ? _days.add(d) : _days.remove(d);
-                    }),
-                  ),
-              ],
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                spacing: 8,
+                children: [
+                  for (var d = 1; d <= 7; d++)
+                    ChoiceChip(
+                      label: Text(dayLabels[d - 1]),
+                      selected: _days.contains(d),
+                      onSelected: (sel) => setState(() {
+                        sel ? _days.add(d) : _days.remove(d);
+                      }),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             TextButton(
