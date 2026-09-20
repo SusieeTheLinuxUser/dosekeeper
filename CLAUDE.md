@@ -17,11 +17,32 @@ That origin is the whole design rationale. **A medication reminder that doesn't 
 is worse than none, because the user trusted it.** Reliability is the product, not a
 feature. Do not trade it away for elegance or convenience.
 
-## Current state (2026-09-19)
+## Current state (2026-09-20)
 
-Built, committed locally (**not yet pushed to any remote**), installed on the user's phone.
+Pushed to `https://github.com/SusieeTheLinuxUser/dosekeeper` (public, MIT), installed on
+the user's phone. `master` is branch-protected — see "Git workflow" below.
 
-- `flutter analyze` clean, 5 unit tests passing, debug APK builds and installs.
+- `flutter analyze` clean, 8 unit tests passing, debug APK builds and installs, CI green.
+- **First real-world alarm test (2026-09-20, 09:00): partial success, one real bug found.**
+  Three test medications (leftover from earlier manual testing, all coincidentally at
+  09:00) fired while the user was actively using another app (scrolling, phone unlocked)
+  — the full-screen intent correctly took over the screen and interrupted them, which is
+  arguably a stronger proof than the earlier locked-screen test. **But:** tapping "Taken"
+  closed the alarm screen without stopping the sound; the user had to force-close the app.
+  Root cause: `AlarmService.startRinging()` created a new `MediaPlayer` on every `RING`
+  intent without stopping the previous one first. Three doses at the same instant meant
+  three overlapping `MediaPlayer`s; dismissing one only ever stopped the most recently
+  created one, leaving the others orphaned and looping forever, un-stoppable short of
+  killing the process. Fixed by releasing all ringing resources (player/vibrator/wakelock)
+  at the top of `startRinging()`, not just in `onDestroy()`. **Still needed: a clean
+  re-test with a single dose** (to confirm dismissal now works at all) **and a proper
+  overnight test** (phone idle/locked for hours, not actively in use) — neither has
+  happened yet. Known remaining rough edge: if two doses genuinely overlap, the second
+  one's ring silently replaces the first's on-screen alarm activity's underlying audio
+  without updating what's on screen (stale medication name until dismissed) — acceptable
+  for now since the critical defect (sound literally impossible to stop) is fixed; true
+  concurrent-dose UX would need the alarm activity to track multiple pending doses, not
+  built.
 - **First real hardware alarm confirmed.** Added a debug-only "Test alarm (10s)" button
   (`AlarmBridge.testAlarm`, wired to the native `testAlarm` handler that already existed
   in `MainActivity.kt` but had no caller) and fired it through the real
@@ -126,14 +147,12 @@ fight the "no account, no server" identity of the app, not just add scope.
 
 ## Best next move
 
-**Run an overnight test before anything else.** Screen-on and locked-screen tests both
-passed manually (2026-09-19, see above). What's unproven is survival over hours of Doze
-while asleep — the actual failure mode that started this project. Use the debug test-alarm
-button to set one for tomorrow morning, or schedule a real medication dose, then leave the
-phone alone overnight exactly as the user normally would (not plugged in and staring at
-it). Only after that should new features get added.
-
-Then: persistent notification, then the activity grid.
+**Re-test dismissal with exactly one dose, then run a real overnight test.** In that
+order — see "Current state" above for why. Delete/retime the leftover test medications
+so nothing collides, fire a single dose a few minutes out (debug test-alarm button or one
+real medication), and confirm Taken actually silences the alarm now. Only after that
+does an overnight test (phone idle/locked for hours, untouched) mean anything. Only after
+*that* should new features get added — see "Future feature ideas" above for what's next.
 
 ## Guardrails
 
