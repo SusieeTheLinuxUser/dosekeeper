@@ -16,7 +16,7 @@ class DoseDatabase {
     final path = p.join(await getDatabasesPath(), 'dosekeeper.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE medications (
@@ -36,6 +36,7 @@ class DoseDatabase {
             scheduled_at INTEGER NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             actioned_at INTEGER,
+            fired_at INTEGER,
             UNIQUE (medication_id, scheduled_at),
             FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
           )
@@ -43,6 +44,14 @@ class DoseDatabase {
         await db.execute(
           'CREATE INDEX idx_doses_scheduled ON doses (scheduled_at)',
         );
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // v1 -> v2: fired_at records when an alarm actually rang, independent of what
+        // the user did about it. Lets a missed dose be attributed to "never fired"
+        // (a real bug) vs. "fired and was ignored" (not a bug), instead of a mystery.
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE doses ADD COLUMN fired_at INTEGER');
+        }
       },
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
     );
@@ -118,6 +127,19 @@ class DoseDatabase {
         'actioned_at': (at ?? DateTime.now()).millisecondsSinceEpoch,
       },
       where: 'id = ?',
+      whereArgs: [doseId],
+    );
+  }
+
+  /// Records when a dose's alarm actually fired. Only sets it the first time -- a
+  /// snoozed dose re-fires under the same dose ID, and the first ring is the one that
+  /// matters for "did it fire on time".
+  Future<void> setDoseFiredAt(int doseId, DateTime firedAt) async {
+    final db = await database;
+    await db.update(
+      'doses',
+      {'fired_at': firedAt.millisecondsSinceEpoch},
+      where: 'id = ? AND fired_at IS NULL',
       whereArgs: [doseId],
     );
   }

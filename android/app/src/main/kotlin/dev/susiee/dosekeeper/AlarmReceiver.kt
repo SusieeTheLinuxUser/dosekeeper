@@ -16,6 +16,18 @@ class AlarmReceiver : BroadcastReceiver() {
         val doseId = intent.getLongExtra(AlarmScheduler.EXTRA_DOSE_ID, -1L)
         Log.i(TAG, "alarm fired for dose $doseId")
 
+        // Record that the OS actually delivered this broadcast, before anything else
+        // that could go wrong (service start failing, ringing failing, the app crashing).
+        // This is the ground truth for "did the alarm really fire" -- without it, a dose
+        // that's still "skipped"/"missed" hours later is ambiguous: did the alarm never
+        // ring (a real bug, the exact failure mode this app exists to catch), or did it
+        // ring and get ignored/dealt with later (not a bug at all)? Recorded here, first,
+        // so the answer survives even if everything downstream fails.
+        context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("$KEY_FIRED_PREFIX$doseId", System.currentTimeMillis())
+            .apply()
+
         val serviceIntent = Intent(context, AlarmService::class.java).apply {
             action = AlarmService.ACTION_RING
             putExtras(intent)
@@ -27,5 +39,8 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    companion object { private const val TAG = "DoseKeeper/Receiver" }
+    companion object {
+        private const val TAG = "DoseKeeper/Receiver"
+        const val KEY_FIRED_PREFIX = "fired_at_"
+    }
 }

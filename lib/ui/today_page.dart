@@ -163,6 +163,15 @@ class _DoseTile extends StatelessWidget {
   final VoidCallback onTaken;
   final VoidCallback onSkip;
 
+  /// For a missed dose, distinguishes "the alarm never rang" (a real bug -- the OS
+  /// never even delivered the broadcast) from "it rang and was ignored" (a human
+  /// choice). Without firedAt these look identical, which is exactly the ambiguity
+  /// that made it impossible to tell what happened the first time a dose was missed.
+  static String _subtitle(DoseStatus status, String time, DateTime? firedAt) {
+    if (status != DoseStatus.missed) return time;
+    return firedAt == null ? '$time · missed (alarm may not have rung)' : '$time · missed';
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = dose.effectiveStatus(now);
@@ -187,7 +196,7 @@ class _DoseTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          status == DoseStatus.missed ? '$time · missed' : time,
+          _subtitle(status, time, dose.firedAt),
           style: TextStyle(color: status == DoseStatus.missed ? color : null),
         ),
         trailing: status == DoseStatus.taken || status == DoseStatus.skipped

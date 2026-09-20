@@ -119,6 +119,30 @@ class MainActivity : FlutterActivity() {
                         result.success(out)
                     }
 
+                    /**
+                     * When each alarm actually fired, per AlarmReceiver.KEY_FIRED_PREFIX.
+                     * Independent of drainPendingActions: that records what the user *did*
+                     * about an alarm, this records whether the alarm *happened* at all --
+                     * the distinction that makes a missed dose attributable instead of a
+                     * mystery.
+                     */
+                    "drainFiredEvents" -> {
+                        val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+                        val out = mutableListOf<Map<String, Any>>()
+                        val editor = prefs.edit()
+                        prefs.all.forEach { (key, value) ->
+                            if (key.startsWith(AlarmReceiver.KEY_FIRED_PREFIX)) {
+                                val doseId = key.removePrefix(AlarmReceiver.KEY_FIRED_PREFIX).toLongOrNull()
+                                if (doseId != null && value is Long) {
+                                    out.add(mapOf("doseId" to doseId, "firedAt" to value))
+                                    editor.remove(key)
+                                }
+                            }
+                        }
+                        editor.apply()
+                        result.success(out)
+                    }
+
                     "consumeNeedsReschedule" -> {
                         val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
                         val needs = prefs.getBoolean(BootReceiver.KEY_NEEDS_RESCHEDULE, false)
