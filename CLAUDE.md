@@ -34,10 +34,15 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   three overlapping `MediaPlayer`s; dismissing one only ever stopped the most recently
   created one, leaving the others orphaned and looping forever, un-stoppable short of
   killing the process. Fixed by releasing all ringing resources (player/vibrator/wakelock)
-  at the top of `startRinging()`, not just in `onDestroy()`. **Still needed: a clean
-  re-test with a single dose** (to confirm dismissal now works at all) **and a proper
-  overnight test** (phone idle/locked for hours, not actively in use) — neither has
-  happened yet. Known remaining rough edge: if two doses genuinely overlap, the second
+  at the top of `startRinging()`, not just in `onDestroy()`. **Confirmed fixed (2026-09-20,
+  09:19):** fired a single debug test alarm on the rebuilt APK, tapped Taken, sound fully
+  stopped — no force-close needed. (Side note from that test, not a bug: the full-screen
+  activity didn't auto-launch immediately because the app happened to be in the foreground
+  when it fired — Android only auto-launches a full-screen intent when the screen is
+  off/locked or the posting app is backgrounded; foregrounded, it correctly falls back to
+  a tappable notification instead. Expected behavior, not something to "fix".)
+  **Still needed: a proper overnight test** (phone idle/locked for hours, not actively in
+  use) — hasn't happened yet. Known remaining rough edge: if two doses genuinely overlap, the second
   one's ring silently replaces the first's on-screen alarm activity's underlying audio
   without updating what's on screen (stale medication name until dismissed) — acceptable
   for now since the critical defect (sound literally impossible to stop) is fixed; true
@@ -147,12 +152,12 @@ fight the "no account, no server" identity of the app, not just add scope.
 
 ## Best next move
 
-**Re-test dismissal with exactly one dose, then run a real overnight test.** In that
-order — see "Current state" above for why. Delete/retime the leftover test medications
-so nothing collides, fire a single dose a few minutes out (debug test-alarm button or one
-real medication), and confirm Taken actually silences the alarm now. Only after that
-does an overnight test (phone idle/locked for hours, untouched) mean anything. Only after
-*that* should new features get added — see "Future feature ideas" above for what's next.
+**Delete the leftover test medications (TestMed, Medicine 1, drug 2 — all coincidentally
+at 09:00, that's what caused the collision bug), then run a real overnight test.**
+Single-dose dismissal is now confirmed working (see "Current state"). What's still
+unproven is survival over hours of Doze while the phone sits idle/locked and actually
+unattended — the original failure mode this whole project exists to fix. Only after that
+should new features get added — see "Future feature ideas" above for what's next.
 
 ## Guardrails
 
