@@ -70,6 +70,18 @@ class AlarmBridge {
         .map((e) => PendingAlarmAction.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
+
+  /// When each alarm actually fired (recorded by AlarmReceiver the instant the OS
+  /// delivers it), independent of whether/how the user responded. This is what makes
+  /// a missed dose attributable: "the alarm never rang" versus "it rang and was
+  /// ignored" are very different findings, and without this there's no way to tell
+  /// them apart after the fact.
+  static Future<List<FiredAlarmEvent>> drainFiredEvents() async {
+    final raw = await _channel.invokeMethod<List<dynamic>>('drainFiredEvents');
+    return (raw ?? [])
+        .map((e) => FiredAlarmEvent.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
 }
 
 class PendingAlarmAction {
@@ -89,5 +101,17 @@ class PendingAlarmAction {
         doseId: (m['doseId'] as num).toInt(),
         action: m['action'] as String? ?? 'TAKEN',
         at: DateTime.fromMillisecondsSinceEpoch((m['at'] as num?)?.toInt() ?? 0),
+      );
+}
+
+class FiredAlarmEvent {
+  const FiredAlarmEvent({required this.doseId, required this.firedAt});
+
+  final int doseId;
+  final DateTime firedAt;
+
+  static FiredAlarmEvent fromMap(Map<String, dynamic> m) => FiredAlarmEvent(
+        doseId: (m['doseId'] as num).toInt(),
+        firedAt: DateTime.fromMillisecondsSinceEpoch((m['firedAt'] as num).toInt()),
       );
 }

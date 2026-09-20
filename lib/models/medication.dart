@@ -86,6 +86,7 @@ class Dose {
     required this.scheduledAt,
     this.status = DoseStatus.pending,
     this.actionedAt,
+    this.firedAt,
   });
 
   final int? id;
@@ -93,6 +94,13 @@ class Dose {
   final DateTime scheduledAt;
   final DoseStatus status;
   final DateTime? actionedAt;
+
+  /// When the alarm actually rang, per the native receiver -- independent of
+  /// [actionedAt], which is when the user responded (if they did). Null means either
+  /// the alarm hasn't fired yet, or (for doses from before this field existed) it's
+  /// simply unknown. Used to tell "never rang" (a real bug) apart from "rang and was
+  /// ignored" (not a bug) for missed doses.
+  final DateTime? firedAt;
 
   /// Grace period before a pending dose counts as missed.
   static const missedAfter = Duration(hours: 2);
@@ -102,12 +110,13 @@ class Dose {
           ? DoseStatus.missed
           : status;
 
-  Dose copyWith({DoseStatus? status, DateTime? actionedAt}) => Dose(
+  Dose copyWith({DoseStatus? status, DateTime? actionedAt, DateTime? firedAt}) => Dose(
         id: id,
         medicationId: medicationId,
         scheduledAt: scheduledAt,
         status: status ?? this.status,
         actionedAt: actionedAt ?? this.actionedAt,
+        firedAt: firedAt ?? this.firedAt,
       );
 
   Map<String, Object?> toRow() => {
@@ -116,6 +125,7 @@ class Dose {
         'scheduled_at': scheduledAt.millisecondsSinceEpoch,
         'status': status.name,
         'actioned_at': actionedAt?.millisecondsSinceEpoch,
+        'fired_at': firedAt?.millisecondsSinceEpoch,
       };
 
   static Dose fromRow(Map<String, Object?> row) => Dose(
@@ -130,5 +140,8 @@ class Dose {
         actionedAt: row['actioned_at'] == null
             ? null
             : DateTime.fromMillisecondsSinceEpoch(row['actioned_at'] as int),
+        firedAt: row['fired_at'] == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(row['fired_at'] as int),
       );
 }

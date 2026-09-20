@@ -67,6 +67,26 @@ void main() {
         DoseStatus.taken,
       );
     });
+
+    test('firedAt survives a database round-trip', () {
+      final firedAt = scheduled.add(const Duration(seconds: 2));
+      final dose = Dose(
+        id: 3,
+        medicationId: 1,
+        scheduledAt: scheduled,
+        firedAt: firedAt,
+      );
+
+      final restored = Dose.fromRow(dose.toRow());
+
+      expect(restored.firedAt, firedAt);
+    });
+
+    test('firedAt is null for a dose that has never rung', () {
+      final dose = Dose(medicationId: 1, scheduledAt: scheduled);
+
+      expect(Dose.fromRow(dose.toRow()).firedAt, isNull);
+    });
   });
 
   group('AdherenceGrid.mondayOf', () {
