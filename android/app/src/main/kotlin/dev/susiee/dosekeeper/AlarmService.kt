@@ -50,6 +50,11 @@ class AlarmService : Service() {
 
         Log.i(TAG, "ringing dose=$doseId med=$medName")
 
+        // Two doses due at the same instant each call this once. Without releasing the
+        // previous ring's player/vibrator/wakelock first, the old MediaPlayer keeps
+        // looping forever, orphaned -- Taken/Snooze only ever stops the most recent one,
+        // so the sound becomes impossible to dismiss short of force-closing the app.
+        releaseRingingResources()
         acquireWakeLock()
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification(doseId, medName, dosage))
@@ -159,11 +164,15 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        releaseRingingResources()
+        super.onDestroy()
+    }
+
+    private fun releaseRingingResources() {
         player?.runCatching { stop(); release() }
         player = null
         vibrator?.cancel()
         wakeLock?.takeIf { it.isHeld }?.release()
-        super.onDestroy()
     }
 
     companion object {
