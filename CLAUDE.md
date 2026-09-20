@@ -22,7 +22,26 @@ feature. Do not trade it away for elegance or convenience.
 Pushed to `https://github.com/SusieeTheLinuxUser/dosekeeper` (public, MIT), installed on
 the user's phone. `master` is branch-protected — see "Git workflow" below.
 
-- `flutter analyze` clean, 8 unit tests passing, debug APK builds and installs, CI green.
+- `flutter analyze` clean, 10 unit tests passing, debug APK builds and installs, CI green.
+- **A real dose was missed with no way to tell why -- root cause of everything below.**
+  Checked the on-device dose history: a Medikinet dose scheduled for 07:00 was marked
+  `skipped`, `actioned_at` 13:01 -- six hours late, and completely ambiguous. Did the
+  alarm never ring (a real bug, the exact failure mode this app exists to catch), or did
+  it ring and get dealt with hours later (a human choice, not a bug at all)? The database
+  only recorded what the *user* did, never whether the *alarm* itself fired. No way to
+  tell the two apart after the fact.
+- **Fixed: `doses.fired_at` now records the moment the OS actually delivers the alarm
+  broadcast, written by `AlarmReceiver.onReceive()` before anything downstream (ringing,
+  the user's response) can fail or go unrecorded.** v1->v2 SQLite migration, verified live
+  against the phone's real production database (not just a fresh install) -- schema
+  upgraded to v2, existing dose history intact, `fired_at` correctly `NULL` on rows that
+  predate the feature. **Verified end-to-end on hardware**, not just in tests: fired the
+  debug test alarm, polled the on-device SharedPreferences file every second by hand, and
+  watched `fired_at_999999` appear at exactly +10s (matching the alarm's own delay to the
+  second) and persist until the next sync drained it. Today screen now shows "missed
+  (alarm may not have rung)" vs. plain "missed" using this. Merged as PR #5.
+  **This directly unblocks the overnight test** (see "Best next move") -- without it, an
+  overnight failure would have been just as unexplainable as today's was.
 - **First real-world alarm test (2026-09-20, 09:00): partial success, one real bug found.**
   Three test medications (leftover from earlier manual testing, all coincidentally at
   09:00) fired while the user was actively using another app (scrolling, phone unlocked)
@@ -115,6 +134,14 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   with the user adding a real medication and looking like the add flow itself was
   ringing alarms. It wasn't (verified via the on-device DB) — but an unconfirmed,
   always-visible "fire a real alarm" button was a real foot-gun regardless.
+- **`doses.fired_at` tracking** (`AlarmReceiver.kt`, `MainActivity.drainFiredEvents`,
+  `AlarmBridge.drainFiredEvents`, `DoseScheduler._applyFiredAlarmEvents`) — records the
+  instant the OS delivers the alarm broadcast, independent of the user's response. See
+  "Current state" above for the full story and the on-device verification. This is what
+  makes the upcoming overnight test conclusive instead of another "who knows" — if the
+  dose is still pending/missed tomorrow with `fired_at` set, that's the OS/Doze/ColorOS
+  killing the ring itself; if `fired_at` is null, the alarm mechanism (`setAlarmClock`,
+  the receiver) never fired at all. Two very different bugs, now distinguishable.
 
 ### Not implemented yet
 
@@ -152,12 +179,43 @@ fight the "no account, no server" identity of the app, not just add scope.
 
 ## Best next move
 
-**Delete the leftover test medications (TestMed, Medicine 1, drug 2 — all coincidentally
-at 09:00, that's what caused the collision bug), then run a real overnight test.**
-Single-dose dismissal is now confirmed working (see "Current state"). What's still
-unproven is survival over hours of Doze while the phone sits idle/locked and actually
-unattended — the original failure mode this whole project exists to fix. Only after that
-should new features get added — see "Future feature ideas" above for what's next.
+**The overnight test is already armed and just needs to happen -- check the result,
+don't set it up again.** State as of 2026-09-20 13:16: the leftover test medications are
+already gone (only one real medication exists, `Medikinet, 1 tablet, 07:00 daily`), and
+`AlarmManager` has real `07:00` alarms armed for the 21st/22nd/23rd, confirmed via
+`adb shell dumpsys alarm` (RTC_WAKEUP, `exactAllowReason=policy_permission`,
+`device_idle=--` meaning Doze isn't deferring it). Nothing needs setting up.
+
+**To check the result, read the on-device database directly (source of truth, not the
+user's memory -- that's literally why this session started):**
+```bash
+adb shell run-as dev.susiee.dosekeeper cat databases/dosekeeper.db > /tmp/dk.db
+python3 -c "
+import sqlite3, datetime
+c = sqlite3.connect('/tmp/dk.db')
+for id_, sa, st, aa, fa in c.execute(
+    'SELECT id,scheduled_at,status,actioned_at,fired_at FROM doses ORDER BY scheduled_at'):
+    f = lambda ms: datetime.datetime.fromtimestamp(ms/1000).strftime('%Y-%m-%d %H:%M') if ms else '-'
+    print(id_, f(sa), st, f(aa), 'fired='+f(fa))
+"
+```
+Look at the row for `2026-09-21 07:00`:
+- **`fired_at` set + `status` = taken/skipped after a reasonable delay** -> it worked.
+  The whole alarm pipeline survived a real, unattended, overnight Doze cycle. This is the
+  milestone that would finally justify calling the app trustworthy -- update "What this
+  is and why" and this file's framing once it's true, not before.
+- **`fired_at` set but the user never interacted (still pending/missed, no `actioned_at`
+  near 07:00)** -> the alarm fired correctly but something failed *after* that (ringing,
+  full-screen intent, or the user genuinely slept through it) -- check `AlarmService`/the
+  notification-permission state, and ask the user what they experienced.
+- **`fired_at` still null well after 07:00** -> the alarm mechanism itself never fired --
+  `AlarmReceiver` never ran. That points at the OS/ColorOS silently dropping the
+  `setAlarmClock` registration, which would be a serious finding worth its own
+  investigation (check `dumpsys alarm` again, check if the app got force-stopped, check
+  ColorOS's own battery/autostart settings for the app).
+
+Only after a clean overnight result should new features get added -- see "Future feature
+ideas" above for what's next.
 
 ## Guardrails
 

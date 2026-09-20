@@ -37,11 +37,17 @@ Each of those exists to survive Doze, App Standby, and OEM battery managers.
   taken/skipped/missed, SQLite persistence, permission self-diagnosis on the Today screen
   (exact alarm, battery optimisation, notification permission), debug test-alarm button,
   persistent ongoing "missed dose" notification (undismissable, clears on taken/skipped),
-  GitHub-style adherence grid on the Today screen.
-- Passing: `flutter analyze` clean, 8 unit tests, debug APK builds, installed on the phone.
-- **Verified once on hardware (2026-09-19):** screen-on and locked-screen full-screen-alarm
-  tests both passed manually. **Still unverified: an overnight test.** Top priority — see
-  `CLAUDE.md` "Best next move".
+  GitHub-style adherence grid on the Today screen, `doses.fired_at` tracking (records the
+  instant the OS delivers the alarm broadcast, independent of the user's response --
+  verified end-to-end on hardware by polling the raw SharedPreferences file).
+- Passing: `flutter analyze` clean, 10 unit tests, debug APK builds, installed on the phone, CI green.
+- **Verified on hardware:** screen-on and locked-screen full-screen-alarm tests (2026-09-19);
+  the `fired_at` write itself, live, twice (2026-09-20, see `CLAUDE.md` "Current state" for
+  the exact method -- worth reusing for future hardware checks).
+- **A real dose was missed with no way to tell why on 2026-09-20 -- that's why `fired_at`
+  exists now.** An overnight alarm is already armed (07:00 tomorrow) with no setup needed;
+  next session should just read the result from the on-device DB. See `CLAUDE.md` "Best
+  next move" for the exact command and how to interpret each outcome.
 - Not built yet: dose history screen; editing/pausing a med without deleting it; export.
 
 ## Safety and honesty
