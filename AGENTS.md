@@ -37,17 +37,21 @@ Each of those exists to survive Doze, App Standby, and OEM battery managers.
   taken/skipped/missed, SQLite persistence, permission self-diagnosis on the Today screen
   (exact alarm, battery optimisation, notification permission), debug test-alarm button,
   persistent ongoing "missed dose" notification (undismissable, clears on taken/skipped),
-  GitHub-style adherence grid on the Today screen, `doses.fired_at` tracking (records the
-  instant the OS delivers the alarm broadcast, independent of the user's response --
-  verified end-to-end on hardware by polling the raw SharedPreferences file).
-- Passing: `flutter analyze` clean, 10 unit tests, debug APK builds, installed on the phone, CI green.
-- **Verified on hardware:** screen-on and locked-screen full-screen-alarm tests (2026-09-19);
-  the `fired_at` write itself, live, twice (2026-09-20, see `CLAUDE.md` "Current state" for
-  the exact method -- worth reusing for future hardware checks).
-- **A real dose was missed with no way to tell why on 2026-09-20 -- that's why `fired_at`
-  exists now.** An overnight alarm is already armed (07:00 tomorrow) with no setup needed;
-  next session should just read the result from the on-device DB. See `CLAUDE.md` "Best
-  next move" for the exact command and how to interpret each outcome.
+  GitHub-style adherence grid on the Today screen, `doses.fired_at` tracking, orphaned-dose
+  reconciliation (`Medication.coversSlot`, `DoseScheduler._reconcileOrphanedDoses`).
+- Passing: `flutter analyze` clean, 13 unit tests, debug APK builds, installed on the phone, CI green.
+- **Overnight test PASSED (2026-09-21 and 09-22):** `fired_at` on both mornings' 07:00
+  doses matches the scheduled time exactly -- `setAlarmClock` survived unattended ColorOS
+  Doze overnight, twice. This was the project's central open question; it's answered.
+- **A second real bug found and fixed the same week (PR #7): orphaned dose alarms.**
+  Editing a medication's schedule only ever added doses for times that remained, never
+  cleaned up doses for times that were *removed* -- a real `AlarmManager` alarm stayed
+  armed for a time invisible in the editor. Fixed and verified live via `dumpsys alarm`
+  before/after. Full story in `CLAUDE.md` "Current state".
+- **Two real, hardware-verified bugs found via actual use in one week.** Keep reading the
+  on-device DB (`databases/dosekeeper.db`) and `dumpsys alarm` periodically rather than
+  trusting `flutter test` alone or the user's memory of what happened -- see `CLAUDE.md`
+  "Best next move" for the exact commands.
 - Not built yet: dose history screen; editing/pausing a med without deleting it; export.
 
 ## Safety and honesty
