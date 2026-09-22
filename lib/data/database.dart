@@ -117,6 +117,14 @@ class DoseDatabase {
     return rows.isEmpty ? null : Dose.fromRow(rows.first);
   }
 
+  /// Removes a dose row outright, rather than marking it skipped -- for a dose that
+  /// should never have existed in the first place (its medication's schedule no longer
+  /// includes that time/day), not one a real decision was made about.
+  Future<void> deleteDose(int id) async {
+    final db = await database;
+    await db.delete('doses', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<void> setDoseStatus(int doseId, DoseStatus status,
       {DateTime? at}) async {
     final db = await database;
