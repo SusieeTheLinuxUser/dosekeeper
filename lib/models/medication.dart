@@ -29,6 +29,15 @@ class Medication {
 
   bool occursOn(DateTime day) => daysOfWeek.contains(day.weekday);
 
+  /// True if this exact date+time-of-day is still a real dose under this medication's
+  /// *current* schedule. Used to tell a legitimately-scheduled dose apart from an
+  /// orphan: a dose row created before the medication's times/days were edited, which
+  /// would otherwise sit in the database forever, still pending, still getting a real
+  /// alarm armed for it -- invisible in the editor because it no longer belongs to any
+  /// time the medication actually lists.
+  bool coversSlot(DateTime scheduledAt) =>
+      active && occursOn(scheduledAt) && timesOfDay.contains(scheduledAt.hour * 60 + scheduledAt.minute);
+
   /// Formats "minutes past midnight" as e.g. "09:00".
   static String formatTime(int minutes) =>
       DateFormat('HH:mm').format(DateTime(2000, 1, 1, 0, minutes));

@@ -35,6 +35,38 @@ void main() {
       expect(med.occursOn(DateTime(2026, 9, 21)), isTrue); // Monday
       expect(med.occursOn(DateTime(2026, 9, 26)), isFalse); // Saturday
     });
+
+    test('coversSlot is true for a time and day the medication still lists', () {
+      const med = Medication(
+        name: 'Meds',
+        timesOfDay: [1290], // 21:30
+        daysOfWeek: {1, 2, 3, 4, 5, 6, 7},
+      );
+
+      expect(med.coversSlot(DateTime(2026, 9, 23, 21, 30)), isTrue);
+    });
+
+    test('coversSlot is false for a time removed from the schedule -- the exact bug '
+        'that left a real alarm armed for a time no longer in any medication', () {
+      const med = Medication(
+        name: 'Meds',
+        timesOfDay: [1290], // 21:30 only, 09:30 was removed
+        daysOfWeek: {1, 2, 3, 4, 5, 6, 7},
+      );
+
+      expect(med.coversSlot(DateTime(2026, 9, 23, 9, 30)), isFalse);
+    });
+
+    test('coversSlot is false for an inactive medication even at a listed time', () {
+      const med = Medication(
+        name: 'Paused',
+        timesOfDay: [540],
+        daysOfWeek: {1, 2, 3, 4, 5, 6, 7},
+        active: false,
+      );
+
+      expect(med.coversSlot(DateTime(2026, 9, 23, 9, 0)), isFalse);
+    });
   });
 
   group('Dose', () {

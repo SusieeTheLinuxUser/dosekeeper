@@ -20,9 +20,32 @@ class DoseScheduler {
     final meds = await _db.medications(activeOnly: true);
 
     await _materialiseDoses(meds, start);
+    await _reconcileOrphanedDoses(start);
     await _armAlarms(meds, start);
     await _applyFiredAlarmEvents();
     await _updateOutstandingNotification(start);
+  }
+
+  /// Cancels and deletes future pending doses that no longer match any medication's
+  /// *current* schedule -- e.g. a time that was removed from a medication after doses
+  /// for it were already materialised. Without this, editing a medication's schedule
+  /// down to fewer times/days leaves the old doses (and their real, armed alarms)
+  /// behind forever: still pending, no longer visible anywhere in the editor since
+  /// they don't belong to any time the medication currently lists, but still ringing
+  /// on schedule regardless. Checked against *all* medications, not just active ones,
+  /// so a dose isn't wrongly treated as an orphan just because its medication was
+  /// fetched in a different query.
+  Future<void> _reconcileOrphanedDoses(DateTime now) async {
+    final allMeds = {for (final m in await _db.medications()) m.id: m};
+    final upcoming = await _db.upcomingPendingDoses(now, now.add(horizon));
+    for (final dose in upcoming) {
+      final med = allMeds[dose.medicationId];
+      if (dose.id == null) continue;
+      if (med == null || !med.coversSlot(dose.scheduledAt)) {
+        await AlarmBridge.cancelDose(dose.id!);
+        await _db.deleteDose(dose.id!);
+      }
+    }
   }
 
   /// Records when each alarm actually fired, independent of what the user did about
