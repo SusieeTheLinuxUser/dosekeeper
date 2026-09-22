@@ -63,4 +63,4 @@ including at least one overnight test, before you drop your existing reminders.
 
 ## Licence
 
-MIT
+[MIT](LICENSE)
