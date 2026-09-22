@@ -63,4 +63,4 @@ including at least one overnight test, before you drop your existing reminders.
 
 ## Licence
 
-[MIT](LICENSE)
+[MIT](https://github.com/SusieeTheLinuxUser/dosekeeper?tab=MIT-1-ov-file)
