@@ -17,7 +17,38 @@ That origin is the whole design rationale. **A medication reminder that doesn't 
 is worse than none, because the user trusted it.** Reliability is the product, not a
 feature. Do not trade it away for elegance or convenience.
 
-## Current state (2026-09-20)
+## Current state (2026-09-22)
+
+**The overnight test passed.** `doses` for the 07:00 medication on 09-21 and 09-22 both
+show `fired_at` matching the scheduled time exactly (`2026-09-21 07:00` and
+`2026-09-22 07:00`), meaning `setAlarmClock` survived two full unattended nights of
+ColorOS Doze on its own and rang on time both mornings. This is the milestone the whole
+project existed to prove, and it held. (09-21's dose wasn't marked `taken` until 19:19
+that evening -- 12 hours after it fired -- which is a human-behaviour gap, not an alarm
+bug: `fired_at` proves the alarm itself rang exactly on time regardless of when the user
+got around to acknowledging it.)
+
+**A second, self-inflicted bug was found and fixed the same day (PR #7): orphaned dose
+alarms.** The user reported "there's an alarm at 9:30 I can't remove" -- and `dumpsys
+alarm` confirmed a real `AlarmManager` alarm genuinely armed for `2026-09-23 09:30`, with
+no corresponding time anywhere in the medication editor. Root cause: editing a
+medication's schedule only ever *added* doses for the times that remained -- editing out
+a time never cancelled or deleted the already-materialised doses for the *removed* time.
+Those rows sat in the database forever, still pending, still getting a real alarm
+re-armed every sync, invisible in the UI because they no longer belonged to any time the
+medication currently listed. Fixed with `Medication.coversSlot()` (a pure check) and
+`DoseScheduler._reconcileOrphanedDoses()` (runs on every `sync()`, cancels + deletes any
+pending dose that fails it -- historical/already-actioned doses are left untouched, they're
+an honest record of what really happened). Verified live: `dumpsys alarm` showed the
+phantom alarm before the fix and confirmed it gone (exactly the right 6 alarms,
+07:00/21:30 only) after installing the fix and launching the app once.
+
+Two real, hardware-verified bugs found and fixed in three days of actual use. That's
+what this project is for -- keep testing like this, don't assume "it built and passed
+`flutter test`" means it's trustworthy. It isn't, until it's been watched fail and get
+fixed on the real device, repeatedly.
+
+## Prior state (2026-09-20)
 
 Pushed to `https://github.com/SusieeTheLinuxUser/dosekeeper` (public, MIT), installed on
 the user's phone. `master` is branch-protected — see "Git workflow" below.
@@ -138,10 +169,19 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   `AlarmBridge.drainFiredEvents`, `DoseScheduler._applyFiredAlarmEvents`) — records the
   instant the OS delivers the alarm broadcast, independent of the user's response. See
   "Current state" above for the full story and the on-device verification. This is what
-  makes the upcoming overnight test conclusive instead of another "who knows" — if the
-  dose is still pending/missed tomorrow with `fired_at` set, that's the OS/Doze/ColorOS
-  killing the ring itself; if `fired_at` is null, the alarm mechanism (`setAlarmClock`,
-  the receiver) never fired at all. Two very different bugs, now distinguishable.
+  made the overnight test conclusive instead of another "who knows" — proved the 07:00
+  alarm fired exactly on time two nights running, not just that the user eventually
+  marked something taken.
+- **Orphaned-dose reconciliation** (`Medication.coversSlot`,
+  `DoseScheduler._reconcileOrphanedDoses`, `DoseDatabase.deleteDose`) — runs on every
+  `sync()`. Cancels the native alarm and deletes any future *pending* dose whose exact
+  time/day no longer matches its medication's current schedule (or whose medication is
+  gone/inactive). Found live: editing a medication's times only ever added doses for the
+  times that remained, never cleaned up doses for times that were *removed* -- they sat
+  in the DB forever, still pending, still getting a real alarm re-armed every sync,
+  invisible in the editor since they no longer belonged to any time the medication
+  currently listed. Historical (already taken/skipped) doses are left alone on purpose --
+  they're an honest record of what happened, orphan or not.
 
 ### Not implemented yet
 
@@ -179,43 +219,35 @@ fight the "no account, no server" identity of the app, not just add scope.
 
 ## Best next move
 
-**The overnight test is already armed and just needs to happen -- check the result,
-don't set it up again.** State as of 2026-09-20 13:16: the leftover test medications are
-already gone (only one real medication exists, `Medikinet, 1 tablet, 07:00 daily`), and
-`AlarmManager` has real `07:00` alarms armed for the 21st/22nd/23rd, confirmed via
-`adb shell dumpsys alarm` (RTC_WAKEUP, `exactAllowReason=policy_permission`,
-`device_idle=--` meaning Doze isn't deferring it). Nothing needs setting up.
+**The overnight test passed and the orphaned-alarm bug is fixed (see "Current state").**
+Both proven live on hardware, not just in tests. The immediate crisis-driven work is
+done; what's next is judgment, not a fixed checklist:
 
-**To check the result, read the on-device database directly (source of truth, not the
-user's memory -- that's literally why this session started):**
-```bash
-adb shell run-as dev.susiee.dosekeeper cat databases/dosekeeper.db > /tmp/dk.db
-python3 -c "
-import sqlite3, datetime
-c = sqlite3.connect('/tmp/dk.db')
-for id_, sa, st, aa, fa in c.execute(
-    'SELECT id,scheduled_at,status,actioned_at,fired_at FROM doses ORDER BY scheduled_at'):
-    f = lambda ms: datetime.datetime.fromtimestamp(ms/1000).strftime('%Y-%m-%d %H:%M') if ms else '-'
-    print(id_, f(sa), st, f(aa), 'fired='+f(fa))
-"
-```
-Look at the row for `2026-09-21 07:00`:
-- **`fired_at` set + `status` = taken/skipped after a reasonable delay** -> it worked.
-  The whole alarm pipeline survived a real, unattended, overnight Doze cycle. This is the
-  milestone that would finally justify calling the app trustworthy -- update "What this
-  is and why" and this file's framing once it's true, not before.
-- **`fired_at` set but the user never interacted (still pending/missed, no `actioned_at`
-  near 07:00)** -> the alarm fired correctly but something failed *after* that (ringing,
-  full-screen intent, or the user genuinely slept through it) -- check `AlarmService`/the
-  notification-permission state, and ask the user what they experienced.
-- **`fired_at` still null well after 07:00** -> the alarm mechanism itself never fired --
-  `AlarmReceiver` never ran. That points at the OS/ColorOS silently dropping the
-  `setAlarmClock` registration, which would be a serious finding worth its own
-  investigation (check `dumpsys alarm` again, check if the app got force-stopped, check
-  ColorOS's own battery/autostart settings for the app).
-
-Only after a clean overnight result should new features get added -- see "Future feature
-ideas" above for what's next.
+- **Keep periodically re-reading the on-device database**, the same way both real bugs
+  this session were found -- not by asking the user "did it work?" (memory is unreliable,
+  see the very first session of this project), but by pulling `databases/dosekeeper.db`
+  directly and checking `fired_at`/`status`/`actioned_at` against what should have
+  happened. This has a 2-for-2 track record of finding real bugs unit tests couldn't.
+  Command:
+  ```bash
+  adb shell run-as dev.susiee.dosekeeper cat databases/dosekeeper.db > /tmp/dk.db
+  python3 -c "
+  import sqlite3, datetime
+  c = sqlite3.connect('/tmp/dk.db')
+  for id_, mid, sa, st, aa, fa in c.execute(
+      'SELECT id,medication_id,scheduled_at,status,actioned_at,fired_at FROM doses ORDER BY scheduled_at'):
+      f = lambda ms: datetime.datetime.fromtimestamp(ms/1000).strftime('%Y-%m-%d %H:%M') if ms else '-'
+      print(id_, mid, f(sa), st, f(aa), 'fired='+f(fa))
+  "
+  ```
+  Also worth `adb shell dumpsys alarm | grep dev.susiee.dosekeeper` periodically -- that's
+  what caught the orphaned alarm, comparing what's *armed* against what's *supposed to be*.
+- **Minor, non-urgent:** both real medications are currently named `Meds` (ids 6 and 7,
+  07:00 and 21:30). Not a bug, just easy to confuse in the UI -- worth suggesting the
+  user rename them to something distinct, next time it comes up naturally.
+- **New features, from "Future feature ideas" above, once the user wants one** -- nothing
+  there is urgent or reliability-critical, so let the user's actual pain points pick the
+  order rather than assuming one.
 
 ## Guardrails
 
