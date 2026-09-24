@@ -152,6 +152,56 @@ class DoseDatabase {
     );
   }
 
+  /// Every dose ever recorded, oldest first -- for backups.
+  Future<List<Dose>> allDoses() async {
+    final db = await database;
+    final rows = await db.query('doses', orderBy: 'scheduled_at');
+    return rows.map(Dose.fromRow).toList();
+  }
+
+  /// Replaces all medications and doses with [meds] and [doses], atomically: either the
+  /// restore lands completely or the old data is left exactly as it was.
+  ///
+  /// Everything gets a fresh id (doses are re-pointed at their medication's new id).
+  /// AUTOINCREMENT never reuses an id, so nothing restored can collide with a native
+  /// alarm or an undrained alarm-screen outcome still keyed by an old dose id.
+  Future<void> replaceAll(List<Medication> meds, List<Dose> doses) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('doses');
+      await txn.delete('medications');
+      final newIds = <int?, int>{};
+      for (final m in meds) {
+        newIds[m.id] = await txn.insert(
+          'medications',
+          Medication(
+            name: m.name,
+            dosage: m.dosage,
+            timesOfDay: m.timesOfDay,
+            daysOfWeek: m.daysOfWeek,
+            active: m.active,
+            notes: m.notes,
+          ).toRow(),
+        );
+      }
+      for (final d in doses) {
+        final medId = newIds[d.medicationId];
+        if (medId == null) continue;
+        await txn.insert(
+          'doses',
+          Dose(
+            medicationId: medId,
+            scheduledAt: d.scheduledAt,
+            status: d.status,
+            actionedAt: d.actionedAt,
+            firedAt: d.firedAt,
+          ).toRow(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    });
+  }
+
   /// Still-pending doses whose scheduled time has already passed. The caller decides
   /// how much grace to allow before treating one as missed.
   Future<List<Dose>> pendingDosesBefore(DateTime cutoff) async {

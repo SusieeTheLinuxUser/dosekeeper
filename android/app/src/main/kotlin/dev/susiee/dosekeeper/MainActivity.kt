@@ -1,6 +1,7 @@
 package dev.susiee.dosekeeper
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -9,6 +10,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
@@ -22,6 +25,9 @@ import io.flutter.plugin.common.MethodChannel
  * (which owns actually ringing on time).
  */
 class MainActivity : FlutterActivity() {
+
+    /** Waiting on a system picker (folder or file); answered from onActivityResult. */
+    private var pendingPick: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -204,6 +210,45 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
 
+                    // --- backups (see BackupStore for why a user-picked folder) ---
+
+                    "backupStatus" -> io(result) { BackupStore.status(this) }
+
+                    "pickBackupFolder" -> startPicker(
+                        result,
+                        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE),
+                        REQ_PICK_BACKUP_FOLDER,
+                    )
+
+                    "listBackups" -> io(result) { BackupStore.list(this) }
+
+                    "readBackup" -> io(result) {
+                        BackupStore.read(this, call.argument<String>("name")!!)
+                    }
+
+                    "writeBackup" -> io(result) {
+                        BackupStore.write(
+                            this,
+                            call.argument<String>("name")!!,
+                            call.argument<String>("content")!!,
+                        )
+                        true
+                    }
+
+                    "deleteBackup" -> io(result) {
+                        BackupStore.delete(this, call.argument<String>("name")!!)
+                        true
+                    }
+
+                    /** Any file, not just *.json: many file managers label JSON as octet-stream. */
+                    "pickBackupFile" -> startPicker(
+                        result,
+                        Intent(Intent.ACTION_OPEN_DOCUMENT)
+                            .addCategory(Intent.CATEGORY_OPENABLE)
+                            .setType("*/*"),
+                        REQ_PICK_BACKUP_FILE,
+                    )
+
                     /** Fire a test alarm N seconds out, to prove the pipeline end to end. */
                     "testAlarm" -> {
                         val seconds = (call.argument<Number>("seconds") ?: 10).toLong()
@@ -222,8 +267,59 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    private fun startPicker(result: MethodChannel.Result, intent: Intent, requestCode: Int) {
+        // A second tap while a picker is open: answer the first so it never hangs.
+        pendingPick?.success(null)
+        pendingPick = result
+        try {
+            startActivityForResult(intent, requestCode)
+        } catch (e: ActivityNotFoundException) {
+            pendingPick = null
+            result.error("no_picker", "This phone has no file picker for that", null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_PICK_BACKUP_FOLDER && requestCode != REQ_PICK_BACKUP_FILE) return
+        val result = pendingPick ?: return
+        pendingPick = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            result.success(null) // cancelled
+            return
+        }
+        when (requestCode) {
+            REQ_PICK_BACKUP_FOLDER -> io(result) {
+                BackupStore.setFolder(this, uri)
+                BackupStore.status(this)
+            }
+            REQ_PICK_BACKUP_FILE -> io(result) { BackupStore.readUri(this, uri) }
+        }
+    }
+
+    /**
+     * Runs file I/O off the main thread (a slow provider must not freeze the UI) and
+     * reports back on it, where MethodChannel results have to be delivered. Failures
+     * go to Dart as errors, never swallowed: a backup that silently didn't happen is
+     * the one failure this feature can't afford.
+     */
+    private fun io(result: MethodChannel.Result, work: () -> Any?) {
+        val main = Handler(Looper.getMainLooper())
+        Thread {
+            try {
+                val value = work()
+                main.post { result.success(value) }
+            } catch (e: Exception) {
+                main.post { result.error("backup_io", e.message ?: e.javaClass.simpleName, null) }
+            }
+        }.start()
+    }
+
     companion object {
         private const val CHANNEL = "dev.susiee.dosekeeper/alarms"
+        private const val REQ_PICK_BACKUP_FOLDER = 4201
+        private const val REQ_PICK_BACKUP_FILE = 4202
 
         /** At or below this (and unplugged), the Today screen warns to charge. */
         private const val LOW_BATTERY_PERCENT = 20

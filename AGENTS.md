@@ -29,19 +29,37 @@ test), cancelled every armed alarm, and reset all three runtime grants (notifica
 exact alarms, battery-optimisation exemption). No backup existed -- the phone was the only
 copy. See the new "Never uninstall" guardrail below; this must not happen again.
 
-Recovery is on the user: re-add both medications (07:00 and 21:30), clear every Today-screen
-warning banner, then confirm with `adb shell dumpsys alarm | grep dev.susiee.dosekeeper`.
-**Next agent: before anything else, verify that recovery actually happened** -- pull the
-DB and check `dumpsys alarm` as described in "Best next move". Don't take "yeah I re-added
-them" on trust; the wipe also silently reset permissions, which is exactly the
-silent-failure class this project exists to catch.
+The user checked Android's own Google backup: it showed **no data backed up** for
+DoseKeeper, so nothing was recoverable from there either.
+
+**Response (same day): backup & restore was built** (see "Implemented"), and the lost
+data was **reconstructed from this repo's own records** into a backup file for the user
+to restore through the new feature. That file was handed to the user directly, **not
+committed** (personal medication data, public repo). What it contains, and how sure it is:
+- Medications: two, both named `Meds`, every day -- one at 07:00, one at 21:30 (as
+  recorded 09-22). Dosage/notes were never recorded, so they're blank.
+- 07:00 doses 09-20..09-24. 09-20 is **skipped** at 13:01 (documented) -- so that day is
+  red, not green. 09-21: taken 19:19, fired 07:00 (documented). 09-22: fired 07:00
+  (documented), outcome not recorded -> taken. 09-23/09-24: not recorded -> taken.
+- 21:30 doses 09-21..09-24, all taken -- the medication existed by 09-22 but its start
+  date was never recorded; 09-21 onwards is a guess.
+- "Taken" rows the docs don't cover have `actionedAt`/`firedAt` null: unknown, not
+  invented. The user asked for the adherence grid to be green; the one documented skip
+  was kept as a skip and flagged to them rather than silently overwritten.
+
+**Next agent: before anything else, verify recovery actually happened** -- that the user
+restored the file (or re-added the medications), cleared every Today-screen warning
+(the wipe reset all permissions), chose a backup folder, and that the alarms are really
+armed: pull the DB and check `dumpsys alarm` as described in "Best next move". Don't take
+"yeah it's fine" on trust; this is the silent-failure class the project exists to catch.
 
 The low-battery warning (PR #13) is merged but **still not verified on hardware** --
 testing it was interrupted by the wipe. Test it with fake battery readings, no rebuild
 needed (see its entry under "Implemented").
 
-This also moves **local export/import** up in practical importance: a backup file would
-have made this incident recoverable.
+Backup & restore is **CI-verified only, not yet on hardware**: still need to see a folder
+picked, a daily file appear in it, a restore from file re-arm the right alarms
+(`dumpsys alarm`), and the "Backups are off" banner show/clear.
 
 ## Prior state (2026-09-22)
 
@@ -230,9 +248,31 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   ```
   Also check that the Settings button lands on a sensible screen on ColorOS.
 
+- **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
+  `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.
+  - Where: a folder the **user picks** via the Storage Access Framework (no storage
+    permission needed). Deliberately not app storage: everything the app owns, including
+    `getExternalFilesDir()`, dies with an uninstall. The folder's files survive it; only
+    the folder *permission* is lost, so after a reinstall the user picks it again.
+  - When: on every Today refresh (open/resume/after any change) -- the DB only changes
+    while Dart runs, so that's always current. One file per day,
+    `dosekeeper-backup-YYYY-MM-DD.json`, rewritten through the day; the newest 14 kept,
+    and pruning only ever touches files matching that exact pattern.
+  - Format: readable, versioned JSON (`Backup` in `backup_format.dart`); times `HH:mm`,
+    timestamps ISO-8601 with UTC offset. `decode` validates everything before a restore
+    is allowed (wrong app, newer format, dangling ids, stored "missed", bad times).
+  - Safety rules, each for a reason: never auto-write an empty DB (a fresh reinstall
+    pointed at the old folder must not clobber today's real backup); picking a folder
+    that already has backups offers to restore first; restore is always confirmed, is
+    one SQLite transaction, re-ids everything, and first drains native outcomes and
+    cancels every armed alarm (incl. snoozes) so no orphaned alarm survives it.
+  - Today screen warns "Backups are off" (no folder / permission gone) and "Automatic
+    backup failed: …", same pattern as the alarm-path warnings.
+  - **Not hardware-verified yet** (see "Current state").
+
 ### Not implemented yet
 
-1. Dose history screen; editing/pausing a med without deleting it; export.
+1. Dose history screen; editing/pausing a med without deleting it.
 
 ### Future feature ideas (not prioritized, not committed to)
 
@@ -253,10 +293,10 @@ Quality of life:
 - **Home-screen widget** showing the next dose at a glance.
 
 Data ownership — fits "no account, no server":
-- **Local export/import** (JSON or CSV) so switching phones doesn't mean starting over.
-  A file the user controls, not a cloud account — stays consistent with the app's whole
-  premise. The 2026-09-24 wipe (see "Current state") is a real example of the loss this
-  would prevent.
+- ~~Local export/import~~ — built as backup & restore (see "Implemented"). Possible
+  follow-ups: a CSV export for reading in a spreadsheet, and a background trigger so a
+  backup also runs on days the app is never opened (today it runs on every app open /
+  change, which covers every database change -- see `BackupService` for why).
 
 Deliberately NOT pursuing: multi-user profiles, cloud sync, SMS/email backup
 notifications, anything else that needs a network permission or an account. Those
