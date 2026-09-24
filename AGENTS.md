@@ -21,9 +21,9 @@ feature. Do not trade it away for elegance or convenience.
 
 **The app was wiped on the phone by an agent's install instruction -- all on-device data
 lost.** While trying to hardware-test the low-battery warning (PR #13), an agent told the
-user to run plain `flutter install`. That defaults to the *release* APK and **uninstalls
-the existing app first** -- before it even checks the release APK exists (it didn't; it
-failed right after). The uninstall deleted `dosekeeper.db` (both medications and the
+user to run plain `flutter install`. **`flutter install` always uninstalls the existing
+app first** (in any build mode) -- here before it even found out the release APK it
+defaulted to didn't exist. The uninstall deleted `dosekeeper.db` (both medications and the
 whole dose history, including the 09-21/09-22 `fired_at` rows that proved the overnight
 test), cancelled every armed alarm, and reset all three runtime grants (notifications,
 exact alarms, battery-optimisation exemption). No backup existed -- the phone was the only
@@ -346,14 +346,23 @@ done; what's next is judgment, not a fixed checklist:
   worst offenders (see dontkillmyapp.com).
 - **Never uninstall the app on the user's phone, and never run a command that does.**
   The on-device DB is the only copy of their medications and dose history, and an
-  uninstall also silently cancels every alarm and resets every permission. Concretely:
-  install with `flutter install --debug` (or `flutter run --debug`), **never** plain
-  `flutter install` -- it defaults to release and uninstalls first, even when the release
-  APK doesn't exist. Never suggest a release build on this phone at all: it's signed with
-  a different key than the installed debug build, so it can only go on via an uninstall.
-  Same for `adb uninstall` and `pm clear`. If an install fails with a signature
-  mismatch, stop and ask -- the "fix" is an uninstall, which is the wipe. This already
-  happened once (2026-09-24, see "Current state") and cost the user all their data.
+  uninstall also silently cancels every alarm and resets every permission. Concretely,
+  the **only** way to install is:
+  ```bash
+  flutter build apk --debug
+  adb install -r build/app/outputs/flutter-apk/app-debug.apk
+  ```
+  `adb install -r` replaces the app and keeps its data; if it can't (e.g. a signature
+  mismatch), it fails and leaves the installed app alone. **Never `flutter install`, in
+  any mode** -- verified in flutter_tools 3.47.4 (`commands/install.dart`, `installApp`):
+  it *always* uninstalls first when the app is present. `--debug` doesn't help; a first
+  version of this guardrail wrongly said it did. **Never `flutter run` either**: its
+  Android install (`android_device.dart`, `installApp`) silently falls back to uninstall +
+  reinstall whenever `adb install -r` fails. No release builds on this phone (different
+  signing key, so they can only go on via an uninstall), no `adb uninstall`, no
+  `pm clear`. If an install fails, stop and ask -- the "fix" is an uninstall, which is the
+  wipe. This already happened once (2026-09-24, see "Current state") and cost the user
+  all their data.
 - It's a health-adjacent app but **not a medical device** — no dosing advice, no claims
   of clinical reliability.
 - Open source, MIT. Keep it free and account-free.
@@ -362,8 +371,9 @@ done; what's next is judgment, not a fixed checklist:
 
 - Flutter 3.47.4, Dart 3.13.3 at `/home/susiee/development/flutter/bin/flutter`
 - Android SDK at `~/Android/Sdk` (platforms 34/35/36), Java 26, `adb` on PATH
-- No Android Studio — build via `flutter build apk --debug` then `flutter install --debug`
-  (**the `--debug` is mandatory** -- see the "Never uninstall" guardrail)
+- No Android Studio — build via `flutter build apk --debug`, install via
+  `adb install -r build/app/outputs/flutter-apk/app-debug.apk` (**never** `flutter install`
+  or `flutter run` -- both can uninstall; see the "Never uninstall" guardrail)
 - `flutter test` and `flutter analyze` both work
 
 ## Conventions
