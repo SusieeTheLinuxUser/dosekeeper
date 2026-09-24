@@ -6,22 +6,21 @@ import android.content.Intent
 import android.util.Log
 
 /**
- * Alarms do not survive a reboot. Flutter owns the schedule, so all this does is record
- * that a reboot happened; the Dart side reschedules everything on next launch, and we
- * proactively start the app's headless engine work via a pending-reschedule flag.
+ * Alarms do not survive a reboot (or, on some OEM builds, an app update). This re-arms
+ * them natively from AlarmScheduler's own record of what was armed -- without waiting
+ * for the user to open the app, which is the only time Dart runs.
+ *
+ * ColorOS only delivers these broadcasts to apps allowed to "auto-launch"; the user has
+ * to allow that for DoseKeeper in the phone's settings (see README).
  */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Log.i(TAG, "boot/replace broadcast: ${intent.action}")
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_NEEDS_RESCHEDULE, true)
-            .apply()
+        AlarmScheduler.rearmAll(context)
     }
 
     companion object {
         private const val TAG = "DoseKeeper/Boot"
         const val PREFS = "dosekeeper_native"
-        const val KEY_NEEDS_RESCHEDULE = "needs_reschedule"
     }
 }

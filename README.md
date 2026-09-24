@@ -30,6 +30,10 @@ well beyond stock Android's rules, and are a common cause of missed alarms. Afte
 installing, allow the app to run in the background and disable battery optimisation
 for it. The Today screen flags both if they're not set.
 
+Also allow DoseKeeper to **auto-launch / start on boot** (on ColorOS: Settings → Apps →
+DoseKeeper → allow auto launch). Android deletes alarms when the phone restarts, and
+DoseKeeper re-arms them at boot, but some skins only let it do that with this setting on.
+
 See [dontkillmyapp.com](https://dontkillmyapp.com) for per-manufacturer steps.
 
 ## Features

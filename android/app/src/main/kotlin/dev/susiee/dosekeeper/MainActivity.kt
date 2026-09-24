@@ -187,13 +187,6 @@ class MainActivity : FlutterActivity() {
                         result.success(out)
                     }
 
-                    "consumeNeedsReschedule" -> {
-                        val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-                        val needs = prefs.getBoolean(BootReceiver.KEY_NEEDS_RESCHEDULE, false)
-                        prefs.edit().putBoolean(BootReceiver.KEY_NEEDS_RESCHEDULE, false).apply()
-                        result.success(needs)
-                    }
-
                     /** An overdue dose exists -- show/update the undismissable reminder. */
                     "updateOutstandingNotification" -> {
                         OutstandingNotifier.show(

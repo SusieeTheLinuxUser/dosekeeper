@@ -119,15 +119,6 @@ class Dose {
           ? DoseStatus.missed
           : status;
 
-  Dose copyWith({DoseStatus? status, DateTime? actionedAt, DateTime? firedAt}) => Dose(
-        id: id,
-        medicationId: medicationId,
-        scheduledAt: scheduledAt,
-        status: status ?? this.status,
-        actionedAt: actionedAt ?? this.actionedAt,
-        firedAt: firedAt ?? this.firedAt,
-      );
-
   Map<String, Object?> toRow() => {
         if (id != null) 'id': id,
         'medication_id': medicationId,

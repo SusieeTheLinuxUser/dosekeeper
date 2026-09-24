@@ -17,7 +17,43 @@ That origin is the whole design rationale. **A medication reminder that doesn't 
 is worse than none, because the user trusted it.** Reliability is the product, not a
 feature. Do not trade it away for elegance or convenience.
 
-## Current state (2026-09-24)
+## Current state (2026-09-24, late)
+
+**Audit ("ponytail" + leaks) found a critical reboot gap, now fixed.** Android deletes an
+app's alarms on reboot. `BootReceiver` only set a `needs_reschedule` flag, and **nothing
+ever read it** (`consumeNeedsReschedule` had no Dart caller) -- so after any restart (OS
+update, battery dying overnight and being recharged) *no dose alarms were armed* until
+the user happened to open the app. Never hit before because the phone never rebooted
+during a test. Fix: `AlarmScheduler` now keeps a native registry of every armed alarm
+(SharedPreferences `dosekeeper_armed_alarms`; added on schedule, removed on cancel and on
+fire), and `BootReceiver` re-arms from it without Dart. A dose that came due while the
+phone was off still rings (10s after boot) if it's within the 2h missed-grace window.
+**Needs hardware verification:** with the app closed, `adb reboot`, unlock, and *without
+opening DoseKeeper* run `adb shell dumpsys alarm | grep dev.susiee.dosekeeper` -- the
+same alarms must be listed. ColorOS only delivers boot broadcasts to apps allowed to
+**auto-launch**, so that setting must be on (README says so). Registry fills on the first
+sync after installing this build, so open the app once after installing before testing.
+
+Also from the audit:
+- **Leak fixed:** `AlarmService` could leak a `MediaPlayer` -- `stop()` throwing (player
+  never started, e.g. `prepare()` failed) skipped `release()`, and a failed setup left
+  the half-built player unreferenced. Both paths now always release.
+- **Personal data:** the medication's brand name (reveals a health condition) was in this
+  public file; replaced with neutral wording. It's still in git history (3 commits from
+  09-20/09-22); only a history rewrite would remove it -- the user's call, not done.
+- **Dead weight cut:** the reboot flag + `consumeNeedsReschedule` (Kotlin + Dart),
+  `Dose.copyWith` and `DoseDatabase.medication()` (no callers), the unused return value of
+  `applyPendingAlarmActions`, `LOCKED_BOOT_COMPLETED` (never delivered to a receiver that
+  isn't direct-boot-aware), 58 lines of template comments in `pubspec.yaml`, and a stale
+  template TODO in `build.gradle.kts`.
+- **Checked clean:** no secrets/keys/tokens in any commit of the history; commit
+  identities are GitHub noreply addresses; text controllers and lifecycle observers are
+  disposed; cursors/streams in `BackupStore` are closed via `use`.
+- **Not changed, worth knowing:** `pubspec.lock` is gitignored, so CI resolves dependency
+  versions fresh on every run. Committing it would pin them, but would make the user's
+  next `git pull` fail on their existing untracked lockfile -- do it with them, not to them.
+
+## Earlier on 2026-09-24
 
 **The app was wiped on the phone by an agent's install instruction -- all on-device data
 lost.** While trying to hardware-test the low-battery warning (PR #13), an agent told the
@@ -107,7 +143,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 
 - `flutter analyze` clean, 10 unit tests passing, debug APK builds and installs, CI green.
 - **A real dose was missed with no way to tell why -- root cause of everything below.**
-  Checked the on-device dose history: a Medikinet dose scheduled for 07:00 was marked
+  Checked the on-device dose history: the 07:00 dose was marked
   `skipped`, `actioned_at` 13:01 -- six hours late, and completely ambiguous. Did the
   alarm never ring (a real bug, the exact failure mode this app exists to catch), or did
   it ring and get dealt with hours later (a human choice, not a bug at all)? The database
@@ -180,7 +216,8 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
     Native (not Flutter) on purpose: must appear instantly from a cold process. Back button
     is intentionally a no-op. Writes TAKEN/SNOOZE to SharedPreferences.
   - `AlarmReceiver.kt` / `BootReceiver.kt` — receiver hands straight off to the service
-    (~10s limit); boot receiver sets a reschedule flag (incl. OEM quickboot actions).
+    (~10s limit); boot receiver re-arms every alarm from `AlarmScheduler`'s native
+    registry (incl. OEM quickboot actions) -- see "Current state" for why.
   - `MainActivity.kt` — MethodChannel `dev.susiee.dosekeeper/alarms`.
 - **Dart side** — `models/medication.dart` (Medication, Dose, status logic),
   `data/database.dart` (SQLite), `services/scheduler.dart` (materialises doses 3 days ahead,
@@ -366,9 +403,9 @@ done; what's next is judgment, not a fixed checklist:
   it *always* uninstalls first when the app is present. `--debug` doesn't help; a first
   version of this guardrail wrongly said it did. **Never `flutter run` either**: its
   Android install (`android_device.dart`, `installApp`) silently falls back to uninstall +
-  reinstall whenever `adb install -r` fails. No release builds on this phone (different
-  signing key, so they can only go on via an uninstall), no `adb uninstall`, no
-  `pm clear`. If an install fails, stop and ask -- the "fix" is an uninstall, which is the
+  reinstall whenever `adb install -r` fails. Stay on debug builds (release is signed with
+  the same debug key per `build.gradle.kts`, but drops the debug test-alarm button). No
+  `adb uninstall`, no `pm clear`. If an install fails, stop and ask -- the "fix" is an uninstall, which is the
   wipe. This already happened once (2026-09-24, see "Current state") and cost the user
   all their data.
 - It's a health-adjacent app but **not a medical device** — no dosing advice, no claims
