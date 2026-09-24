@@ -1,6 +1,7 @@
 import '../data/database.dart';
 import '../models/medication.dart';
 import 'alarm_bridge.dart';
+import 'backup_format.dart';
 
 /// Turns medication schedules into concrete doses, and arms native alarms for them.
 ///
@@ -127,6 +128,24 @@ class DoseScheduler {
       // SNOOZE re-arms itself natively; the dose stays pending on purpose.
     }
     return pending.length;
+  }
+
+  /// Replaces every medication and all history with [backup]'s, then re-arms alarms
+  /// for the restored schedule.
+  ///
+  /// Order matters. First, land anything the native side recorded against the
+  /// *current* dose ids (alarm-screen taps, fired times) -- after the swap those ids
+  /// mean nothing. Then cancel every alarm the current data has armed, including a
+  /// snoozed one whose dose time has already passed: left armed, it would ring for a
+  /// dose that no longer exists, the same orphaned-alarm bug PR #7 fixed.
+  Future<void> restore(Backup backup, {DateTime? now}) async {
+    await applyPendingAlarmActions();
+    await _applyFiredAlarmEvents();
+    for (final dose in await _db.pendingDosesBefore(DateTime(9999))) {
+      if (dose.id != null) await AlarmBridge.cancelDose(dose.id!);
+    }
+    await _db.replaceAll(backup.medications, backup.doses);
+    await sync(now: now);
   }
 
   Future<void> markTaken(int doseId) =>

@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 import '../data/database.dart';
 import '../models/medication.dart';
 import '../services/alarm_bridge.dart';
+import '../services/backup_service.dart';
 import '../services/scheduler.dart';
 import 'adherence_grid.dart';
+import 'backup_page.dart';
 
 class TodayPage extends StatefulWidget {
   const TodayPage({super.key, required this.scheduler});
@@ -24,6 +26,8 @@ class TodayPageState extends State<TodayPage> {
   bool _notificationsOk = true;
   // Battery *level*, distinct from _batteryOk (the optimisation whitelist).
   bool _batteryLevelOk = true;
+  bool _backupsOn = true;
+  String? _backupError;
   Map<DateTime, ({int taken, int total})> _adherence = {};
 
   @override
@@ -45,6 +49,8 @@ class TodayPageState extends State<TodayPage> {
     final battery = await AlarmBridge.isIgnoringBatteryOptimizations();
     final notifications = await AlarmBridge.hasNotificationPermission();
     final batteryLow = await AlarmBridge.isBatteryLow();
+    // After sync, so the backup includes anything just drained from the alarm screen.
+    final backup = await BackupService.instance.backUpQuietly();
     final adherence = await _db.dailyAdherence(
       start.subtract(const Duration(days: 26 * 7)),
       start.add(const Duration(days: 1)),
@@ -61,6 +67,9 @@ class TodayPageState extends State<TodayPage> {
       _batteryOk = battery;
       _notificationsOk = notifications;
       _batteryLevelOk = !batteryLow;
+      // A failed status read counts as "on": the failure itself is shown instead.
+      _backupsOn = backup?.enabled ?? true;
+      _backupError = BackupService.instance.lastError;
       _adherence = adherence;
       _loading = false;
     });
@@ -72,6 +81,13 @@ class TodayPageState extends State<TodayPage> {
         ? await widget.scheduler.markTaken(dose.id!)
         : await widget.scheduler.markSkipped(dose.id!);
     await AlarmBridge.cancelDose(dose.id!);
+    await refresh();
+  }
+
+  Future<void> _openBackups() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => BackupPage(scheduler: widget.scheduler)),
+    );
     await refresh();
   }
 
@@ -111,6 +127,21 @@ class TodayPageState extends State<TodayPage> {
             await Future<void>.delayed(const Duration(seconds: 1));
             await refresh();
           },
+        ),
+      // Losing all data to one uninstall is how backups came to exist -- treat
+      // "no backups" as a real risk, same as the alarm-path warnings above.
+      if (!_backupsOn)
+        _Warning(
+          text: 'Backups are off. Reinstalling or resetting the phone would '
+              'erase your medications and history.',
+          actionLabel: 'Set up',
+          onAction: _openBackups,
+        ),
+      if (_backupsOn && _backupError != null)
+        _Warning(
+          text: 'Automatic backup failed: $_backupError',
+          actionLabel: 'Fix',
+          onAction: _openBackups,
         ),
       if (!_batteryLevelOk)
         _Warning(

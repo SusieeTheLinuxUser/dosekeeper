@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'services/alarm_bridge.dart';
 import 'services/scheduler.dart';
+import 'ui/backup_page.dart';
 import 'ui/medications_page.dart';
 import 'ui/today_page.dart';
 
@@ -74,6 +75,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text('DoseKeeper'),
         actions: [
+          IconButton(
+            tooltip: 'Backup & restore',
+            icon: const Icon(Icons.backup_outlined),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => BackupPage(scheduler: _scheduler),
+                ),
+              );
+              // A restore may have replaced everything both tabs show.
+              _todayKey.currentState?.refresh();
+              _medsKey.currentState?.refresh();
+            },
+          ),
           // Fires a real alarm through the real pipeline, to verify it rings on
           // this device. Debug builds only -- not something a user should need.
           // Confirms first: this sits on the app bar on every screen, and an
