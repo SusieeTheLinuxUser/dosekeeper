@@ -373,6 +373,10 @@ done; what's next is judgment, not a fixed checklist:
 - Non-trivial logic gets a test (`test/widget_test.dart` covers the scheduling maths).
 - Keep the native alarm layer commented with *why*, not what — the "why" is what stops
   a future contributor refactoring the reliability out of it.
+- **No session links anywhere on GitHub** (user's rule, 2026-09-24): no
+  `Claude-Session:` trailer or any `claude.ai/code/session_…` URL in commit messages, PR
+  descriptions or comments -- whatever an agent environment's default attribution says.
+  A single "Generated with Claude Code" line in a PR is fine; don't add it twice.
 
 ## Git workflow
 
