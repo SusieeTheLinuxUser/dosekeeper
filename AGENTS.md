@@ -17,7 +17,33 @@ That origin is the whole design rationale. **A medication reminder that doesn't 
 is worse than none, because the user trusted it.** Reliability is the product, not a
 feature. Do not trade it away for elegance or convenience.
 
-## Current state (2026-09-22)
+## Current state (2026-09-24)
+
+**The app was wiped on the phone by an agent's install instruction -- all on-device data
+lost.** While trying to hardware-test the low-battery warning (PR #13), an agent told the
+user to run plain `flutter install`. That defaults to the *release* APK and **uninstalls
+the existing app first** -- before it even checks the release APK exists (it didn't; it
+failed right after). The uninstall deleted `dosekeeper.db` (both medications and the
+whole dose history, including the 09-21/09-22 `fired_at` rows that proved the overnight
+test), cancelled every armed alarm, and reset all three runtime grants (notifications,
+exact alarms, battery-optimisation exemption). No backup existed -- the phone was the only
+copy. See the new "Never uninstall" guardrail below; this must not happen again.
+
+Recovery is on the user: re-add both medications (07:00 and 21:30), clear every Today-screen
+warning banner, then confirm with `adb shell dumpsys alarm | grep dev.susiee.dosekeeper`.
+**Next agent: before anything else, verify that recovery actually happened** -- pull the
+DB and check `dumpsys alarm` as described in "Best next move". Don't take "yeah I re-added
+them" on trust; the wipe also silently reset permissions, which is exactly the
+silent-failure class this project exists to catch.
+
+The low-battery warning (PR #13) is merged but **still not verified on hardware** --
+testing it was interrupted by the wipe. Test it with fake battery readings, no rebuild
+needed (see its entry under "Implemented").
+
+This also moves **local export/import** up in practical importance: a backup file would
+have made this incident recoverable.
+
+## Prior state (2026-09-22)
 
 **The overnight test passed.** `doses` for the 07:00 medication on 09-21 and 09-22 both
 show `fired_at` matching the scheduled time exactly (`2026-09-21 07:00` and
@@ -191,10 +217,18 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   to avoid false alarms. Button opens battery-saver settings, falling back to main
   Settings if an OEM build doesn't resolve that intent. Only re-evaluated on
   `refresh()` (open/resume/pull-to-refresh), same as the other warnings. CI-verified
-  only (analyze/test/build) -- **not yet verified on the real device**: still need to
-  confirm it appears below 20% unplugged (or with the threshold temporarily raised),
-  disappears when plugged in, and that the Settings button lands on a sensible
-  screen on ColorOS.
+  only (analyze/test/build) -- **not yet verified on the real device**. Test it by faking
+  the battery state over adb; no code change or reinstall needed. (Raising the
+  threshold alone won't work: a phone on a USB cable reports as plugged in, so the card
+  correctly stays hidden.)
+  ```bash
+  adb shell dumpsys battery unplug        # report "not plugged in"
+  adb shell dumpsys battery set level 15  # card should appear (pull to refresh)
+  adb shell dumpsys battery set ac 1      # "charger" at 15% -> card should hide
+  adb shell dumpsys battery set ac 0; adb shell dumpsys battery set level 50  # hidden
+  adb shell dumpsys battery reset         # ALWAYS undo, or the fake sticks until reboot
+  ```
+  Also check that the Settings button lands on a sensible screen on ColorOS.
 
 ### Not implemented yet
 
@@ -221,7 +255,8 @@ Quality of life:
 Data ownership — fits "no account, no server":
 - **Local export/import** (JSON or CSV) so switching phones doesn't mean starting over.
   A file the user controls, not a cloud account — stays consistent with the app's whole
-  premise.
+  premise. The 2026-09-24 wipe (see "Current state") is a real example of the loss this
+  would prevent.
 
 Deliberately NOT pursuing: multi-user profiles, cloud sync, SMS/email backup
 notifications, anything else that needs a network permission or an account. Those
@@ -252,9 +287,9 @@ done; what's next is judgment, not a fixed checklist:
   ```
   Also worth `adb shell dumpsys alarm | grep dev.susiee.dosekeeper` periodically -- that's
   what caught the orphaned alarm, comparing what's *armed* against what's *supposed to be*.
-- **Minor, non-urgent:** both real medications are currently named `Meds` (ids 6 and 7,
-  07:00 and 21:30). Not a bug, just easy to confuse in the UI -- worth suggesting the
-  user rename them to something distinct, next time it comes up naturally.
+- **Minor, non-urgent:** before the 09-24 wipe both real medications were named `Meds`
+  (07:00 and 21:30), which was easy to confuse. If they got re-added under the same
+  name, suggest distinct names next time it comes up naturally.
 - **New features, from "Future feature ideas" above, once the user wants one** -- nothing
   there is urgent or reliability-critical, so let the user's actual pain points pick the
   order rather than assuming one.
@@ -269,6 +304,16 @@ done; what's next is judgment, not a fixed checklist:
 - **Test on the real device**, not just an emulator — OEM battery-killing is the entire
   problem class here. User's phone is OnePlus/Oppo **ColorOS** (`CPH2747`), one of the
   worst offenders (see dontkillmyapp.com).
+- **Never uninstall the app on the user's phone, and never run a command that does.**
+  The on-device DB is the only copy of their medications and dose history, and an
+  uninstall also silently cancels every alarm and resets every permission. Concretely:
+  install with `flutter install --debug` (or `flutter run --debug`), **never** plain
+  `flutter install` -- it defaults to release and uninstalls first, even when the release
+  APK doesn't exist. Never suggest a release build on this phone at all: it's signed with
+  a different key than the installed debug build, so it can only go on via an uninstall.
+  Same for `adb uninstall` and `pm clear`. If an install fails with a signature
+  mismatch, stop and ask -- the "fix" is an uninstall, which is the wipe. This already
+  happened once (2026-09-24, see "Current state") and cost the user all their data.
 - It's a health-adjacent app but **not a medical device** — no dosing advice, no claims
   of clinical reliability.
 - Open source, MIT. Keep it free and account-free.
@@ -277,7 +322,8 @@ done; what's next is judgment, not a fixed checklist:
 
 - Flutter 3.47.4, Dart 3.13.3 at `/home/susiee/development/flutter/bin/flutter`
 - Android SDK at `~/Android/Sdk` (platforms 34/35/36), Java 26, `adb` on PATH
-- No Android Studio — build via `flutter build apk --debug` / `flutter install`
+- No Android Studio — build via `flutter build apk --debug` then `flutter install --debug`
+  (**the `--debug` is mandatory** -- see the "Never uninstall" guardrail)
 - `flutter test` and `flutter analyze` both work
 
 ## Conventions
