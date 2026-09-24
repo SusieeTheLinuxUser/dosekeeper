@@ -54,8 +54,10 @@ committed** (personal medication data, public repo). What it contains, and how s
 shown, grid 09-20 red / 09-21..24 green as restored, and no warnings left except a
 genuine low-battery one (15%, unplugged). So also confirmed live: restore re-arms alarms,
 the backup folder is set and the automatic backup isn't failing (neither backup warning
-shows), and the permission warnings were all cleared. The first morning alarm after the
-wipe (09-25 07:00) is still unproven -- check its `fired_at` next session.
+shows), and the permission warnings were all cleared. The user then fired the debug test
+alarm and reported it works -- the ring pipeline is intact after the permission reset.
+The first real morning alarm after the wipe (09-25 07:00) is still unproven -- check its
+`fired_at` next session.
 
 The low-battery warning (PR #13) is merged but **still not verified on hardware** --
 testing it was interrupted by the wipe. Test it with fake battery readings, no rebuild
