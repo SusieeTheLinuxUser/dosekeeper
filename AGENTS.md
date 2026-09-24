@@ -21,9 +21,9 @@ feature. Do not trade it away for elegance or convenience.
 
 **The app was wiped on the phone by an agent's install instruction -- all on-device data
 lost.** While trying to hardware-test the low-battery warning (PR #13), an agent told the
-user to run plain `flutter install`. That defaults to the *release* APK and **uninstalls
-the existing app first** -- before it even checks the release APK exists (it didn't; it
-failed right after). The uninstall deleted `dosekeeper.db` (both medications and the
+user to run plain `flutter install`. **`flutter install` always uninstalls the existing
+app first** (in any build mode) -- here before it even found out the release APK it
+defaulted to didn't exist. The uninstall deleted `dosekeeper.db` (both medications and the
 whole dose history, including the 09-21/09-22 `fired_at` rows that proved the overnight
 test), cancelled every armed alarm, and reset all three runtime grants (notifications,
 exact alarms, battery-optimisation exemption). No backup existed -- the phone was the only
@@ -47,19 +47,27 @@ committed** (personal medication data, public repo). What it contains, and how s
   invented. The user asked for the adherence grid to be green; the one documented skip
   was kept as a skip and flagged to them rather than silently overwritten.
 
-**Next agent: before anything else, verify recovery actually happened** -- that the user
-restored the file (or re-added the medications), cleared every Today-screen warning
-(the wipe reset all permissions), chose a backup folder, and that the alarms are really
-armed: pull the DB and check `dumpsys alarm` as described in "Best next move". Don't take
-"yeah it's fine" on trust; this is the silent-failure class the project exists to catch.
+**Recovery verified on hardware (2026-09-24, ~22:30).** Installed with
+`adb install -r` (data kept), restored the reconstructed file via Backup & restore.
+`dumpsys alarm` then showed exactly 6 dose alarms: 07:00 and 21:30 on 09-25, 09-26 and
+09-27 (CEST) -- the same shape as before the wipe, no strays. Today screen: both doses
+shown, grid 09-20 red / 09-21..24 green as restored, and no warnings left except a
+genuine low-battery one (15%, unplugged). So also confirmed live: restore re-arms alarms,
+the backup folder is set and the automatic backup isn't failing (neither backup warning
+shows), and the permission warnings were all cleared. The user then fired the debug test
+alarm and reported it works -- the ring pipeline is intact after the permission reset.
+The first real morning alarm after the wipe (09-25 07:00) is still unproven -- check its
+`fired_at` next session.
 
 The low-battery warning (PR #13) is merged but **still not verified on hardware** --
 testing it was interrupted by the wipe. Test it with fake battery readings, no rebuild
 needed (see its entry under "Implemented").
 
-Backup & restore is **CI-verified only, not yet on hardware**: still need to see a folder
-picked, a daily file appear in it, a restore from file re-arm the right alarms
-(`dumpsys alarm`), and the "Backups are off" banner show/clear.
+Low-battery warning: **appearing confirmed on hardware** (real 15%, unplugged, 09-24).
+Still unconfirmed: it clears on plugging in, and where the Settings button lands on
+ColorOS. Backup & restore: restore confirmed on hardware (above); not yet seen
+directly: the `dosekeeper-backup-YYYY-MM-DD.json` file in the chosen folder
+(`adb shell ls /sdcard/Documents`), or the "Backups are off" banner showing.
 
 ## Prior state (2026-09-22)
 
@@ -268,7 +276,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
     cancels every armed alarm (incl. snoozes) so no orphaned alarm survives it.
   - Today screen warns "Backups are off" (no folder / permission gone) and "Automatic
     backup failed: …", same pattern as the alarm-path warnings.
-  - **Not hardware-verified yet** (see "Current state").
+  - Restore verified on hardware 2026-09-24; see "Current state" for what's left.
 
 ### Not implemented yet
 
@@ -346,14 +354,23 @@ done; what's next is judgment, not a fixed checklist:
   worst offenders (see dontkillmyapp.com).
 - **Never uninstall the app on the user's phone, and never run a command that does.**
   The on-device DB is the only copy of their medications and dose history, and an
-  uninstall also silently cancels every alarm and resets every permission. Concretely:
-  install with `flutter install --debug` (or `flutter run --debug`), **never** plain
-  `flutter install` -- it defaults to release and uninstalls first, even when the release
-  APK doesn't exist. Never suggest a release build on this phone at all: it's signed with
-  a different key than the installed debug build, so it can only go on via an uninstall.
-  Same for `adb uninstall` and `pm clear`. If an install fails with a signature
-  mismatch, stop and ask -- the "fix" is an uninstall, which is the wipe. This already
-  happened once (2026-09-24, see "Current state") and cost the user all their data.
+  uninstall also silently cancels every alarm and resets every permission. Concretely,
+  the **only** way to install is:
+  ```bash
+  flutter build apk --debug
+  adb install -r build/app/outputs/flutter-apk/app-debug.apk
+  ```
+  `adb install -r` replaces the app and keeps its data; if it can't (e.g. a signature
+  mismatch), it fails and leaves the installed app alone. **Never `flutter install`, in
+  any mode** -- verified in flutter_tools 3.47.4 (`commands/install.dart`, `installApp`):
+  it *always* uninstalls first when the app is present. `--debug` doesn't help; a first
+  version of this guardrail wrongly said it did. **Never `flutter run` either**: its
+  Android install (`android_device.dart`, `installApp`) silently falls back to uninstall +
+  reinstall whenever `adb install -r` fails. No release builds on this phone (different
+  signing key, so they can only go on via an uninstall), no `adb uninstall`, no
+  `pm clear`. If an install fails, stop and ask -- the "fix" is an uninstall, which is the
+  wipe. This already happened once (2026-09-24, see "Current state") and cost the user
+  all their data.
 - It's a health-adjacent app but **not a medical device** — no dosing advice, no claims
   of clinical reliability.
 - Open source, MIT. Keep it free and account-free.
@@ -362,8 +379,9 @@ done; what's next is judgment, not a fixed checklist:
 
 - Flutter 3.47.4, Dart 3.13.3 at `/home/susiee/development/flutter/bin/flutter`
 - Android SDK at `~/Android/Sdk` (platforms 34/35/36), Java 26, `adb` on PATH
-- No Android Studio — build via `flutter build apk --debug` then `flutter install --debug`
-  (**the `--debug` is mandatory** -- see the "Never uninstall" guardrail)
+- No Android Studio — build via `flutter build apk --debug`, install via
+  `adb install -r build/app/outputs/flutter-apk/app-debug.apk` (**never** `flutter install`
+  or `flutter run` -- both can uninstall; see the "Never uninstall" guardrail)
 - `flutter test` and `flutter analyze` both work
 
 ## Conventions
@@ -373,6 +391,10 @@ done; what's next is judgment, not a fixed checklist:
 - Non-trivial logic gets a test (`test/widget_test.dart` covers the scheduling maths).
 - Keep the native alarm layer commented with *why*, not what — the "why" is what stops
   a future contributor refactoring the reliability out of it.
+- **No session links anywhere on GitHub** (user's rule, 2026-09-24): no
+  `Claude-Session:` trailer or any `claude.ai/code/session_…` URL in commit messages, PR
+  descriptions or comments -- whatever an agent environment's default attribution says.
+  A single "Generated with Claude Code" line in a PR is fine; don't add it twice.
 
 ## Git workflow
 

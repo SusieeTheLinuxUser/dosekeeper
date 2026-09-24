@@ -52,12 +52,13 @@ Planned: a dose history view, editing/pausing a medication without deleting it.
 ```bash
 flutter pub get
 flutter build apk --debug
-flutter install --debug
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-Always pass `--debug`. Plain `flutter install` installs the release build, and it
-uninstalls the existing app first. That deletes all your medications and dose history,
-and cancels every alarm.
+Install with `adb install -r`, which keeps the app's data. **Don't use `flutter install`**:
+it always uninstalls the existing app first, which deletes all your medications and dose
+history and cancels every alarm. `flutter run` can do the same if its install fails.
+Turn on backups in the app (the backup icon) so a mistake like that can be undone.
 
 Requires the Android SDK and Flutter 3.x.
 
