@@ -121,7 +121,10 @@ class AlarmService : Service() {
             val uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            player = MediaPlayer().apply {
+            // Assigned before it's set up, so a failure below (bad ringtone URI, prepare()
+            // throwing) still leaves it where releaseRingingResources() will free it.
+            player = MediaPlayer()
+            player?.apply {
                 setDataSource(this@AlarmService, uri)
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -169,7 +172,12 @@ class AlarmService : Service() {
     }
 
     private fun releaseRingingResources() {
-        player?.runCatching { stop(); release() }
+        // stop() throws if the player never started (e.g. prepare() failed). release()
+        // must still run, or the native player leaks for the life of the process.
+        player?.let { p ->
+            runCatching { p.stop() }
+            p.release()
+        }
         player = null
         vibrator?.cancel()
         wakeLock?.takeIf { it.isHeld }?.release()

@@ -64,9 +64,6 @@ class AlarmBridge {
   static Future<void> clearOutstandingNotification() =>
       _channel.invokeMethod('clearOutstandingNotification');
 
-  static Future<bool> consumeNeedsReschedule() async =>
-      await _channel.invokeMethod<bool>('consumeNeedsReschedule') ?? false;
-
   /// Fires a real alarm N seconds out, through the exact same pipeline as a real
   /// dose, to prove end-to-end that it rings on this device.
   static Future<void> testAlarm(int seconds) =>

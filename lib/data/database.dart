@@ -69,12 +69,6 @@ class DoseDatabase {
     return rows.map(Medication.fromRow).toList();
   }
 
-  Future<Medication?> medication(int id) async {
-    final db = await database;
-    final rows = await db.query('medications', where: 'id = ?', whereArgs: [id]);
-    return rows.isEmpty ? null : Medication.fromRow(rows.first);
-  }
-
   Future<int> upsertMedication(Medication med) async {
     final db = await database;
     if (med.id == null) return db.insert('medications', med.toRow());

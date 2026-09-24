@@ -117,7 +117,7 @@ class DoseScheduler {
   }
 
   /// Applies outcomes the native alarm screen recorded while Dart wasn't running.
-  Future<int> applyPendingAlarmActions() async {
+  Future<void> applyPendingAlarmActions() async {
     final pending = await AlarmBridge.drainPendingActions();
     for (final action in pending) {
       final dose = await _db.dose(action.doseId);
@@ -127,7 +127,6 @@ class DoseScheduler {
       }
       // SNOOZE re-arms itself natively; the dose stays pending on purpose.
     }
-    return pending.length;
   }
 
   /// Replaces every medication and all history with [backup]'s, then re-arms alarms
