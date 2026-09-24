@@ -47,19 +47,25 @@ committed** (personal medication data, public repo). What it contains, and how s
   invented. The user asked for the adherence grid to be green; the one documented skip
   was kept as a skip and flagged to them rather than silently overwritten.
 
-**Next agent: before anything else, verify recovery actually happened** -- that the user
-restored the file (or re-added the medications), cleared every Today-screen warning
-(the wipe reset all permissions), chose a backup folder, and that the alarms are really
-armed: pull the DB and check `dumpsys alarm` as described in "Best next move". Don't take
-"yeah it's fine" on trust; this is the silent-failure class the project exists to catch.
+**Recovery verified on hardware (2026-09-24, ~22:30).** Installed with
+`adb install -r` (data kept), restored the reconstructed file via Backup & restore.
+`dumpsys alarm` then showed exactly 6 dose alarms: 07:00 and 21:30 on 09-25, 09-26 and
+09-27 (CEST) -- the same shape as before the wipe, no strays. Today screen: both doses
+shown, grid 09-20 red / 09-21..24 green as restored, and no warnings left except a
+genuine low-battery one (15%, unplugged). So also confirmed live: restore re-arms alarms,
+the backup folder is set and the automatic backup isn't failing (neither backup warning
+shows), and the permission warnings were all cleared. The first morning alarm after the
+wipe (09-25 07:00) is still unproven -- check its `fired_at` next session.
 
 The low-battery warning (PR #13) is merged but **still not verified on hardware** --
 testing it was interrupted by the wipe. Test it with fake battery readings, no rebuild
 needed (see its entry under "Implemented").
 
-Backup & restore is **CI-verified only, not yet on hardware**: still need to see a folder
-picked, a daily file appear in it, a restore from file re-arm the right alarms
-(`dumpsys alarm`), and the "Backups are off" banner show/clear.
+Low-battery warning: **appearing confirmed on hardware** (real 15%, unplugged, 09-24).
+Still unconfirmed: it clears on plugging in, and where the Settings button lands on
+ColorOS. Backup & restore: restore confirmed on hardware (above); not yet seen
+directly: the `dosekeeper-backup-YYYY-MM-DD.json` file in the chosen folder
+(`adb shell ls /sdcard/Documents`), or the "Backups are off" banner showing.
 
 ## Prior state (2026-09-22)
 
@@ -268,7 +274,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
     cancels every armed alarm (incl. snoozes) so no orphaned alarm survives it.
   - Today screen warns "Backups are off" (no folder / permission gone) and "Automatic
     backup failed: …", same pattern as the alarm-path warnings.
-  - **Not hardware-verified yet** (see "Current state").
+  - Restore verified on hardware 2026-09-24; see "Current state" for what's left.
 
 ### Not implemented yet
 
