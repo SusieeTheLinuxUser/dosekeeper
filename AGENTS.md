@@ -88,7 +88,9 @@ committed** (personal medication data, public repo). What it contains, and how s
 `dumpsys alarm` then showed exactly 6 dose alarms: 07:00 and 21:30 on 09-25, 09-26 and
 09-27 (CEST) -- the same shape as before the wipe, no strays. Today screen: both doses
 shown, grid 09-20 red / 09-21..24 green as restored, and no warnings left except a
-genuine low-battery one (15%, unplugged). So also confirmed live: restore re-arms alarms,
+low-battery one -- which turned out to be **faked**: the `dumpsys battery unplug` /
+`set level 15` test commands from earlier had been run and never undone (see the
+"Undo every device fake" guardrail). The phone was really at 97-99% and charging. So also confirmed live: restore re-arms alarms,
 the backup folder is set and the automatic backup isn't failing (neither backup warning
 shows), and the permission warnings were all cleared. The user then fired the debug test
 alarm and reported it works -- the ring pipeline is intact after the permission reset.
@@ -99,7 +101,8 @@ The low-battery warning (PR #13) is merged but **still not verified on hardware*
 testing it was interrupted by the wipe. Test it with fake battery readings, no rebuild
 needed (see its entry under "Implemented").
 
-Low-battery warning: **appearing confirmed on hardware** (real 15%, unplugged, 09-24).
+Low-battery warning: **appearing confirmed on hardware** (via the faked 15%/unplugged
+state, which is the intended test method, 09-24).
 Still unconfirmed: it clears on plugging in, and where the Settings button lands on
 ColorOS. Backup & restore: restore confirmed on hardware (above); not yet seen
 directly: the `dosekeeper-backup-YYYY-MM-DD.json` file in the chosen folder
@@ -408,6 +411,13 @@ done; what's next is judgment, not a fixed checklist:
   `adb uninstall`, no `pm clear`. If an install fails, stop and ask -- the "fix" is an uninstall, which is the
   wipe. This already happened once (2026-09-24, see "Current state") and cost the user
   all their data.
+- **Undo every device fake in the same breath.** Any command that changes the phone's
+  state for a test (`adb shell dumpsys battery unplug`/`set level`, `settings put`, `cmd`
+  overrides, …) goes in the same code block as its undo (`adb shell dumpsys battery
+  reset`), and before moving on, confirm with the user that the undo was run. On
+  2026-09-24 the battery fakes were left in place after plans changed mid-test: the phone
+  showed 15% and "not charging" for an hour while really at 99%, and the user thought
+  their phone was broken. Also means: a faked state can make the app's own warnings lie.
 - It's a health-adjacent app but **not a medical device** — no dosing advice, no claims
   of clinical reliability.
 - Open source, MIT. Keep it free and account-free.
