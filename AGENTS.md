@@ -183,6 +183,19 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   currently listed. Historical (already taken/skipped) doses are left alone on purpose --
   they're an honest record of what happened, orphan or not.
 
+- **Low-battery warning** (`MainActivity` `isBatteryLow`/`openBatterySettings`,
+  `AlarmBridge.isBatteryLow`, `TodayPageState._batteryLevelOk`) — fourth Today-screen
+  self-diagnosis card: shows when battery is <= 20% (`LOW_BATTERY_PERCENT`) **and**
+  unplugged, since a phone that dies overnight can't ring. Reads the sticky
+  `ACTION_BATTERY_CHANGED` broadcast (no permission needed); unknown level reads as "fine"
+  to avoid false alarms. Button opens battery-saver settings, falling back to main
+  Settings if an OEM build doesn't resolve that intent. Only re-evaluated on
+  `refresh()` (open/resume/pull-to-refresh), same as the other warnings. CI-verified
+  only (analyze/test/build) -- **not yet verified on the real device**: still need to
+  confirm it appears below 20% unplugged (or with the threshold temporarily raised),
+  disappears when plugged in, and that the Settings button lands on a sensible
+  screen on ColorOS.
+
 ### Not implemented yet
 
 1. Dose history screen; editing/pausing a med without deleting it; export.
@@ -193,9 +206,6 @@ Reliability-adjacent — fits the core mission, worth doing before pure nice-to-
 - **Taken/Skip action buttons directly on the missed-dose notification** — right now
   clearing it means opening the app; a notification action would let you resolve it
   from the lock screen, same spirit as the alarm screen itself.
-- **Low-battery warning on the Today screen** — same self-diagnosis pattern as the
-  existing exact-alarm/battery-optimisation/notification-permission checks. A dead
-  phone can't ring, and that's a failure mode entirely outside the alarm pipeline.
 - **Gradually-increasing alarm volume** for heavy sleepers who sleep through a flat tone.
 
 Quality of life:

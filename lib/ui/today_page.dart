@@ -22,6 +22,8 @@ class TodayPageState extends State<TodayPage> {
   bool _exactOk = true;
   bool _batteryOk = true;
   bool _notificationsOk = true;
+  // Battery *level*, distinct from _batteryOk (the optimisation whitelist).
+  bool _batteryLevelOk = true;
   Map<DateTime, ({int taken, int total})> _adherence = {};
 
   @override
@@ -42,6 +44,7 @@ class TodayPageState extends State<TodayPage> {
     final exact = await AlarmBridge.canScheduleExact();
     final battery = await AlarmBridge.isIgnoringBatteryOptimizations();
     final notifications = await AlarmBridge.hasNotificationPermission();
+    final batteryLow = await AlarmBridge.isBatteryLow();
     final adherence = await _db.dailyAdherence(
       start.subtract(const Duration(days: 26 * 7)),
       start.add(const Duration(days: 1)),
@@ -57,6 +60,7 @@ class TodayPageState extends State<TodayPage> {
       _exactOk = exact;
       _batteryOk = battery;
       _notificationsOk = notifications;
+      _batteryLevelOk = !batteryLow;
       _adherence = adherence;
       _loading = false;
     });
@@ -104,6 +108,16 @@ class TodayPageState extends State<TodayPage> {
           actionLabel: 'Fix',
           onAction: () async {
             await AlarmBridge.requestIgnoreBatteryOptimizations();
+            await Future<void>.delayed(const Duration(seconds: 1));
+            await refresh();
+          },
+        ),
+      if (!_batteryLevelOk)
+        _Warning(
+          text: 'Battery is low. Plug in your phone so alarms can keep ringing.',
+          actionLabel: 'Settings',
+          onAction: () async {
+            await AlarmBridge.openBatterySettings();
             await Future<void>.delayed(const Duration(seconds: 1));
             await refresh();
           },

@@ -32,6 +32,15 @@ class AlarmBridge {
   static Future<void> requestIgnoreBatteryOptimizations() =>
       _channel.invokeMethod('requestIgnoreBatteryOptimizations');
 
+  /// True when the battery is at or below 20% and not plugged in. A phone that
+  /// powers off overnight can't ring, which no amount of alarm-pipeline hardening
+  /// can fix -- the only defence is telling the user to charge while there's time.
+  static Future<bool> isBatteryLow() async =>
+      await _channel.invokeMethod<bool>('isBatteryLow') ?? false;
+
+  static Future<void> openBatterySettings() =>
+      _channel.invokeMethod('openBatterySettings');
+
   /// Without this, the alarm's full-screen lockscreen takeover silently never fires
   /// (the OS drops the notification it rides on) even though the alarm still rings.
   static Future<bool> hasNotificationPermission() async =>

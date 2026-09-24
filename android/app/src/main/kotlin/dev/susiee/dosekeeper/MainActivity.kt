@@ -1,10 +1,13 @@
 package dev.susiee.dosekeeper
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -64,6 +67,41 @@ class MainActivity : FlutterActivity() {
                             Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                                 .setData(Uri.parse("package:$packageName")),
                         )
+                        result.success(true)
+                    }
+
+                    /**
+                     * A phone that dies overnight can't ring, and nothing in the alarm pipeline
+                     * can detect or survive that -- so warn while there's still time to plug in.
+                     * Reads the sticky ACTION_BATTERY_CHANGED broadcast (passing a null receiver
+                     * registers nothing; it just returns the last value), which needs no
+                     * permission. Anything plugged in counts as fine even if the level is low:
+                     * "plugged but not charging" (e.g. a weak USB port) still isn't the
+                     * die-overnight case this is for.
+                     */
+                    "isBatteryLow" -> {
+                        val status = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                        val level = status?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                        val scale = status?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+                        val plugged = status?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+                        // Unknown level -> don't cry wolf; a warning that's wrong trains the
+                        // user to ignore the real ones above it.
+                        val low = level >= 0 && scale > 0 &&
+                            level * 100 / scale <= LOW_BATTERY_PERCENT && plugged == 0
+                        result.success(low)
+                    }
+
+                    /**
+                     * No single "fix" dialog exists for a low battery, so open the closest
+                     * settings screen. Battery-saver settings isn't guaranteed to resolve on
+                     * every OEM build (ColorOS reshuffles settings), hence the fallback.
+                     */
+                    "openBatterySettings" -> {
+                        try {
+                            startActivity(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
+                        } catch (e: ActivityNotFoundException) {
+                            startActivity(Intent(Settings.ACTION_SETTINGS))
+                        }
                         result.success(true)
                     }
 
@@ -184,5 +222,10 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    companion object { private const val CHANNEL = "dev.susiee.dosekeeper/alarms" }
+    companion object {
+        private const val CHANNEL = "dev.susiee.dosekeeper/alarms"
+
+        /** At or below this (and unplugged), the Today screen warns to charge. */
+        private const val LOW_BATTERY_PERCENT = 20
+    }
 }
