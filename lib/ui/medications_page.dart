@@ -108,6 +108,6 @@ class MedicationsPageState extends State<MedicationsPage> {
     final days = everyDay
         ? 'every day'
         : (med.daysOfWeek.toList()..sort()).map((d) => names[d - 1]).join(', ');
-    return '$times  ·  $days';
+    return [times, days, if (med.notes.isNotEmpty) med.notes].join('  ·  ');
   }
 }

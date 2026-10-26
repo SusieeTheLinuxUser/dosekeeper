@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dosekeeper/models/medication.dart';
 import 'package:dosekeeper/ui/adherence_grid.dart';
+import 'package:dosekeeper/ui/medication_edit_page.dart';
 
 void main() {
   group('Medication', () {
@@ -133,5 +135,24 @@ void main() {
     test('steps back across a month boundary from Sunday', () {
       expect(AdherenceGrid.mondayOf(DateTime(2026, 10, 4)), DateTime(2026, 9, 28)); // Sun -> Mon
     });
+  });
+
+  testWidgets('medication notes are available when editing', (tester) async {
+    const med = Medication(
+      id: 7,
+      name: 'Meds',
+      timesOfDay: [480],
+      daysOfWeek: Medication.everyDay,
+      notes: 'Take with food',
+    );
+    await tester.pumpWidget(
+      const MaterialApp(home: MedicationEditPage(existing: med)),
+    );
+
+    final notesField = tester.widget<TextFormField>(
+      find.byType(TextFormField).last,
+    );
+    expect(find.text('Notes (optional)'), findsOneWidget);
+    expect(notesField.controller?.text, 'Take with food');
   });
 }

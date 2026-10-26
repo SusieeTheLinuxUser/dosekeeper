@@ -17,6 +17,8 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
       TextEditingController(text: widget.existing?.name ?? '');
   late final TextEditingController _dosage =
       TextEditingController(text: widget.existing?.dosage ?? '');
+  late final TextEditingController _notes =
+      TextEditingController(text: widget.existing?.notes ?? '');
   late List<int> _times = [...?widget.existing?.timesOfDay];
   late Set<int> _days = {...?widget.existing?.daysOfWeek} .isEmpty
       ? {...Medication.everyDay}
@@ -26,6 +28,7 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
   void dispose() {
     _name.dispose();
     _dosage.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
@@ -61,6 +64,7 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
         .copyWith(
       name: _name.text.trim(),
       dosage: _dosage.text.trim(),
+      notes: _notes.text.trim(),
       timesOfDay: _times,
       daysOfWeek: _days,
     );
@@ -101,6 +105,17 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
               decoration: const InputDecoration(
                 labelText: 'Dose (optional)',
                 hintText: 'e.g. 50mg, 2 tablets',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _notes,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Notes (optional)',
+                hintText: 'e.g. Take with food',
                 border: OutlineInputBorder(),
               ),
             ),
