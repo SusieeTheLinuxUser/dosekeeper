@@ -88,7 +88,9 @@ class DoseScheduler {
   Future<void> _materialiseDoses(List<Medication> meds, DateTime now) async {
     final today = DateTime(now.year, now.month, now.day);
     for (var dayOffset = 0; dayOffset <= horizon.inDays; dayOffset++) {
-      final day = today.add(Duration(days: dayOffset));
+      // Construct each local calendar date directly. Adding 24 hours to midnight
+      // can land at 01:00 or 23:00 across DST, shifting every dose on that date.
+      final day = DateTime(today.year, today.month, today.day + dayOffset);
       for (final med in meds) {
         if (med.id == null || !med.occursOn(day)) continue;
         for (final minutes in med.timesOfDay) {
