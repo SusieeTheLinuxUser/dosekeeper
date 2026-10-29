@@ -42,7 +42,8 @@ class TodayPageState extends State<TodayPage> {
 
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
-    final doses = await _db.dosesBetween(start, start.add(const Duration(days: 1)));
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final doses = await _db.dosesBetween(start, tomorrow);
     final meds = {for (final m in await _db.medications()) m.id: m};
 
     final exact = await AlarmBridge.canScheduleExact();
@@ -52,8 +53,8 @@ class TodayPageState extends State<TodayPage> {
     // After sync, so the backup includes anything just drained from the alarm screen.
     final backup = await BackupService.instance.backUpQuietly();
     final adherence = await _db.dailyAdherence(
-      start.subtract(const Duration(days: 26 * 7)),
-      start.add(const Duration(days: 1)),
+      DateTime(now.year, now.month, now.day - 26 * 7),
+      tomorrow,
     );
 
     if (!mounted) return;
