@@ -208,6 +208,9 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 
 ### Implemented
 
+- **Medication notes** — the existing notes field can be edited and appears with the
+  medication schedule in the medication list (e.g. "Take with food").
+
 - **Native alarm layer** (`android/app/src/main/kotlin/dev/susiee/dosekeeper/`)
   - `AlarmScheduler.kt` — `AlarmManager.setAlarmClock()`. Chosen deliberately: it is the
     only alarm API Android treats as a genuine user alarm clock (Doze-exempt, App
@@ -331,9 +334,6 @@ Reliability-adjacent — fits the core mission, worth doing before pure nice-to-
 - **Gradually-increasing alarm volume** for heavy sleepers who sleep through a flat tone.
 
 Quality of life:
-- **Surface the `notes` field** — it already exists on `Medication` and round-trips
-  through the DB, but nothing in the edit UI lets you set it or shows it anywhere
-  (e.g. "take with food"). Cheapest item on this list; the model already supports it.
 - **"As-needed" (PRN) medications** — no fixed schedule, just a manual log button for
   ad hoc doses. Common for real regimens (e.g. pain relief) that the current
   fixed-time/fixed-weekday model can't represent at all.
