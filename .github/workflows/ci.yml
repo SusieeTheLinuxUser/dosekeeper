@@ -19,7 +19,10 @@ jobs:
 
       - run: flutter pub get
       - run: flutter analyze
+      # A zone with DST, so the clock-change tests mean something.
       - run: flutter test
+        env:
+          TZ: Europe/Warsaw
 
       # Catches native Kotlin build breakage that analyze/test can't see.
       - run: flutter build apk --debug

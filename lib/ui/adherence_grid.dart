@@ -18,7 +18,8 @@ class AdherenceGrid extends StatelessWidget {
       builder: (context, constraints) {
         final weeks =
             ((constraints.maxWidth + _gap) / (_cell + _gap)).floor().clamp(4, 26);
-        final weekStart = mondayOf(today).subtract(Duration(days: 7 * (weeks - 1)));
+        final monday = mondayOf(today);
+        final weekStart = DateTime(monday.year, monday.month, monday.day - 7 * (weeks - 1));
 
         return SizedBox(
           height: 7 * _cell + 6 * _gap,
@@ -35,7 +36,7 @@ class AdherenceGrid extends StatelessWidget {
                           padding: EdgeInsets.only(bottom: d == 6 ? 0 : _gap),
                           child: _daySquare(
                             context,
-                            weekStart.add(Duration(days: 7 * w + d)),
+                            DateTime(weekStart.year, weekStart.month, weekStart.day + 7 * w + d),
                           ),
                         ),
                     ],
@@ -81,8 +82,7 @@ class AdherenceGrid extends StatelessWidget {
   /// The Monday on or before [day], so week columns always start Monday
   /// regardless of which weekday [day] itself falls on.
   static DateTime mondayOf(DateTime day) =>
-      DateTime(day.year, day.month, day.day)
-          .subtract(Duration(days: day.weekday - 1));
+      DateTime(day.year, day.month, day.day - (day.weekday - 1));
 
   static String _fmt(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 }

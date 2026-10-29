@@ -14,6 +14,12 @@ class DoseScheduler {
   /// pending alarms comfortably; this keeps us well inside that.
   static const horizon = Duration(days: 3);
 
+  /// [minutes] past midnight on [day], by the wall clock. Built from date parts, never
+  /// by adding a Duration: across a DST change 24 hours (or 480 minutes) from midnight
+  /// is an hour off, and a dose an hour off its slot is deleted as an orphan.
+  static DateTime slot(DateTime day, int minutes) =>
+      DateTime(day.year, day.month, day.day, 0, minutes);
+
   /// Regenerates upcoming doses and re-arms alarms. Safe to call repeatedly --
   /// dose creation is idempotent on (medication, scheduled_at).
   Future<void> sync({DateTime? now}) async {
@@ -86,15 +92,12 @@ class DoseScheduler {
   }
 
   Future<void> _materialiseDoses(List<Medication> meds, DateTime now) async {
-    final today = DateTime(now.year, now.month, now.day);
     for (var dayOffset = 0; dayOffset <= horizon.inDays; dayOffset++) {
-      // Construct each local calendar date directly. Adding 24 hours to midnight
-      // can land at 01:00 or 23:00 across DST, shifting every dose on that date.
-      final day = DateTime(today.year, today.month, today.day + dayOffset);
+      final day = DateTime(now.year, now.month, now.day + dayOffset);
       for (final med in meds) {
         if (med.id == null || !med.occursOn(day)) continue;
         for (final minutes in med.timesOfDay) {
-          final at = day.add(Duration(minutes: minutes));
+          final at = slot(day, minutes);
           // Don't create doses for times that already passed before the med existed.
           if (at.isBefore(now.subtract(const Duration(hours: 12)))) continue;
           await _db.ensureDose(med.id!, at);
