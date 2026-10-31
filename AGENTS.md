@@ -406,8 +406,9 @@ done; what's next is judgment, not a fixed checklist:
   it *always* uninstalls first when the app is present. `--debug` doesn't help; a first
   version of this guardrail wrongly said it did. **Never `flutter run` either**: its
   Android install (`android_device.dart`, `installApp`) silently falls back to uninstall +
-  reinstall whenever `adb install -r` fails. Stay on debug builds (release is signed with
-  the same debug key per `build.gradle.kts`, but drops the debug test-alarm button). No
+  reinstall whenever `adb install -r` fails. Stay on debug builds: a release build is signed
+  with the release key when `android/key.properties` exists (see "Releases"), so it can't
+  replace the debug-signed copy on the phone -- and an uninstall to "fix" that is the wipe. No
   `adb uninstall`, no `pm clear`. If an install fails, stop and ask -- the "fix" is an uninstall, which is the
   wipe. This already happened once (2026-09-24, see "Current state") and cost the user
   all their data.
@@ -442,6 +443,20 @@ done; what's next is judgment, not a fixed checklist:
   `Claude-Session:` trailer or any `claude.ai/code/session_…` URL in commit messages, PR
   descriptions or comments -- whatever an agent environment's default attribution says.
   A single "Generated with Claude Code" line in a PR is fine; don't add it twice.
+
+## Releases
+
+- Bump `version:` in `pubspec.yaml`, merge, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+  `.github/workflows/release.yml` builds a signed release APK and publishes a GitHub Release.
+- Signing: `android/key.properties` + `android/keystore/release-key.jks` (both gitignored).
+  The key and its password are backed up in `~/.android/keystores/dosekeeper-release.*` on
+  the user's machine (made 2026-10-31; losing it means no update can ever install over a
+  release install). CI reads the GitHub secrets `ANDROID_KEYSTORE_BASE64`,
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and refuses to publish without them.
+  Without `key.properties` a local release build falls back to the debug key.
+- **The phone runs a debug-signed build.** A release APK can't install over it (Android
+  refuses: different signature). Moving the phone to release builds means Settings → backup,
+  uninstall, install the release, restore -- the user's decision, never an agent's.
 
 ## Git workflow
 
