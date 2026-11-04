@@ -19,8 +19,10 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
-Work is on the `dev` branch, PR #22, for release v1.1.5. Stable release is held until the
-user has run a 1.1.5 debug build, because that build changes the manifest (Google backup).
+v1.1.5 comes from PR #22. The phone runs `1.1.5-debug`, seen working on 2026-11-04: the app
+opens, folder backup ran, and the Google backup switch is on. No real Google backup has been
+confirmed yet, so check it with `bmgr` (see "Android's Google backup" below) when the phone is
+next on USB.
 
 ## Earlier: reboot audit (2026-09-24, late)
 
@@ -312,8 +314,8 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   page, off by default). `allowBackup` is fixed at build time, so the choice lives in the
   agent: off hands Android nothing, which also skips phone-to-phone transfer. It adds no
   network permission or account, since Android does the upload. It isn't a Drive folder of
-  readable files: that would need sign-in and network access. **Not tested on hardware.**
-  Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, switch on and off.
+  readable files: that would need sign-in and network access. Switch seen on hardware; **a real
+  backup through it hasn't been confirmed.** Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, switch on and off.
 
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.
