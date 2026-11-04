@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'services/alarm_bridge.dart';
 import 'services/scheduler.dart';
 import 'ui/backup_page.dart';
+import 'ui/info_page.dart';
 import 'ui/medications_page.dart';
 import 'ui/today_page.dart';
 
@@ -88,6 +89,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               _todayKey.currentState?.refresh();
               _medsKey.currentState?.refresh();
             },
+          ),
+          IconButton(
+            tooltip: 'Info',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const InfoPage()),
+            ),
           ),
           // Fires a real alarm through the real pipeline, to verify it rings on
           // this device. Debug builds only -- not something a user should need.

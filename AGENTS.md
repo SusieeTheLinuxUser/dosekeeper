@@ -306,6 +306,9 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   ```
   Also check that the Settings button lands on a sensible screen on ColorOS.
 
+- **Info page** (`lib/ui/info_page.dart`, app-bar info icon) -- version as Android reports
+  it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`).
+
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.
   - Where: a folder the **user picks** via the Storage Access Framework (no storage
@@ -464,6 +467,12 @@ done; what's next is judgment, not a fixed checklist:
 - **The phone runs a debug-signed build.** A release APK can't install over it (Android
   refuses: different signature). Moving the phone to release builds means Settings → backup,
   uninstall, install the release, restore -- the user's decision, never an agent's.
+
+- **Dev builds for testing away from the desk:** a pre-release from the `dev` branch, tagged
+  `dev-X.Y.Z`. Not `vX.Y.Z-anything`: `release.yml` matches `v*.*.*`, and would publish it as
+  a stable release. The debug APK must be built **on the user's machine**: only its
+  `~/.android/debug.keystore` matches the phone. A CI debug build has a different key and
+  won't install, and the "fix" for that is the wipe.
 
 ## Git workflow
 

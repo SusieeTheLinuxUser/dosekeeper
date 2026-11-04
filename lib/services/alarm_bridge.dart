@@ -73,6 +73,10 @@ class AlarmBridge {
   static Future<void> clearOutstandingNotification() =>
       _channel.invokeMethod('clearOutstandingNotification');
 
+  /// The installed version as Android reports it, e.g. "1.1.0" or "1.1.0-debug".
+  static Future<String> appVersion() async =>
+      await _channel.invokeMethod<String>('appVersion') ?? 'Unknown';
+
   /// Fires a real alarm N seconds out, through the exact same pipeline as a real
   /// dose, to prove end-to-end that it rings on this device.
   static Future<void> testAlarm(int seconds) =>

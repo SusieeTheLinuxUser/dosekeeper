@@ -187,6 +187,10 @@ class MainActivity : FlutterActivity() {
                         result.success(out)
                     }
 
+                    "appVersion" -> {
+                        result.success(packageManager.getPackageInfo(packageName, 0).versionName)
+                    }
+
                     /** An overdue dose exists -- show/update the reminder. */
                     "updateOutstandingNotification" -> {
                         OutstandingNotifier.show(
