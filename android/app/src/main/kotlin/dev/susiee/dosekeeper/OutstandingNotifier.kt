@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 
@@ -34,11 +35,15 @@ object OutstandingNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // Fires on a user swipe or "clear all", never on our own cancel().
+        // Fires on a user swipe or "clear all", never on our own cancel(). Unique data per
+        // update: otherwise this one PendingIntent changes just before the notification
+        // does, and a swipe in that gap would discard doses the user never saw listed.
         val dismissed = PendingIntent.getBroadcast(
             context,
             0,
-            Intent(context, OutstandingDismissedReceiver::class.java).putExtra(KEY_DISMISSED_THROUGH, shownAt),
+            Intent(context, OutstandingDismissedReceiver::class.java)
+                .setData(Uri.parse("dosekeeper://outstanding/$shownAt"))
+                .putExtra(KEY_DISMISSED_THROUGH, shownAt),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 

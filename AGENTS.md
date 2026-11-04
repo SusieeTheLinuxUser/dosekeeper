@@ -233,13 +233,13 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   optimisation is on, or notification permission is denied, with one-tap links to the
   system settings/dialogs that fix each.
 - **Persistent missed-dose notification** (`OutstandingNotifier.kt`, `DoseScheduler._updateOutstandingNotification`)
-  — an ongoing, non-swipeable notification (separate channel from the ringing alarm,
+  — a notification (separate channel from the ringing alarm,
   no sound) that shows whenever any dose is past its 2h missed-grace period and still
   pending. Recomputed on every `sync()` call (app open, resume, after saving a med, after
   marking a dose), so it clears itself once the dose is marked taken/skipped. Verified on
   device by inserting a fake overdue dose directly into the SQLite DB: notification
-  appeared with the right medication name, survived a swipe-to-dismiss gesture, and
-  cleared once the fake row was removed. Known gap: only updates when the app actually
+  appeared with the right medication name and cleared once the fake row was removed.
+  (That build also couldn't be swiped away; see below.) Known gap: only updates when the app actually
   runs some code (open/resume) — there's no background job keeping it fresh purely from
   time passing while the app sits closed. Acceptable for now since the ringing alarm is
   the primary mechanism; this is the backstop for after that's been seen and ignored/missed.
@@ -251,7 +251,10 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   (nothing is rewritten). Not in backups, so a restore can show old doses once more.
   **Verified on hardware 2026-11-04** (1.1.0-debug, installed over the old build with data
   intact): swiped it, closed and reopened the app, and it stayed gone. Still unproven on the
-  device: a dose missed *after* a swipe brings it back (unit-tested only).
+  device: a dose missed *after* a swipe brings it back (unit-tested only). Known, on
+  purpose: a dose back-filled after a swipe (a medication added or edited with a time up to
+  12h ago, which never had an alarm) doesn't notify if it was already overdue when the swiped
+  notification was shown. The Today screen still lists it.
 - **GitHub-style adherence grid** (`lib/ui/adherence_grid.dart`) — on the Today screen,
   above the dose list. One column per week, one row per weekday, coloured by taken/total
   for that day (grey = no dose that day, red = fully missed, green shades = partial-to-full).
@@ -314,6 +317,11 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   network permission. Tapping Version 10 times shows "But nobody came...": a deliberate
   joke about Android's tap-to-become-a-developer, not a leftover. One in 10,000 of those
   shows a JoJo line instead, also on purpose.
+
+- **Android's own Google backup is not turned off:** the manifest doesn't set
+  `android:allowBackup`, so it defaults to on and may copy the database to the user's Google
+  account. The Info page says so. `allowBackup="false"` would stop it, but also removes
+  that possible recovery route: the user's call.
 
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.
