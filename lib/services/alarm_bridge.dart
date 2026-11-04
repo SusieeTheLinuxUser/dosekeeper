@@ -49,17 +49,26 @@ class AlarmBridge {
   static Future<void> requestNotificationPermission() =>
       _channel.invokeMethod('requestNotificationPermission');
 
-  /// Ongoing, undismissable notification for doses past their grace period. Stays
-  /// until [clearOutstandingNotification] is called, so it can't be swiped away and
-  /// forgotten the way a normal notification could.
+  /// Notification for doses past their grace period, as of [shownAt]. Stays until
+  /// [clearOutstandingNotification] is called or the user swipes it away, which
+  /// discards those doses for good: see [outstandingDismissedThrough].
   static Future<void> updateOutstandingNotification({
     required String title,
     required String text,
+    required DateTime shownAt,
   }) =>
       _channel.invokeMethod('updateOutstandingNotification', {
         'title': title,
         'text': text,
+        'shownAt': shownAt.millisecondsSinceEpoch,
       });
+
+  /// The [updateOutstandingNotification] `shownAt` of the last notification the user
+  /// swiped away. Epoch if they never have.
+  static Future<DateTime> outstandingDismissedThrough() async =>
+      DateTime.fromMillisecondsSinceEpoch(
+        await _channel.invokeMethod<int>('outstandingDismissedThrough') ?? 0,
+      );
 
   static Future<void> clearOutstandingNotification() =>
       _channel.invokeMethod('clearOutstandingNotification');

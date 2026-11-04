@@ -187,14 +187,23 @@ class MainActivity : FlutterActivity() {
                         result.success(out)
                     }
 
-                    /** An overdue dose exists -- show/update the undismissable reminder. */
+                    /** An overdue dose exists -- show/update the reminder. */
                     "updateOutstandingNotification" -> {
                         OutstandingNotifier.show(
                             this,
                             title = call.argument<String>("title") ?: "Missed dose",
                             text = call.argument<String>("text") ?: "",
+                            shownAt = call.argument<Number>("shownAt")?.toLong() ?: 0L,
                         )
                         result.success(true)
+                    }
+
+                    /** Doses overdue by this time were swiped away by the user; 0 if none. */
+                    "outstandingDismissedThrough" -> {
+                        result.success(
+                            getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+                                .getLong(OutstandingNotifier.KEY_DISMISSED_THROUGH, 0L),
+                        )
                     }
 
                     /** No more overdue doses -- clear the reminder. */

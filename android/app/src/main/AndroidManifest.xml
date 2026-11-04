@@ -55,6 +55,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".OutstandingDismissedReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".BootReceiver"
             android:exported="true"
             android:enabled="true">

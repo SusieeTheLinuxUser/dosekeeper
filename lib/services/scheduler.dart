@@ -66,13 +66,29 @@ class DoseScheduler {
     }
   }
 
+  /// Doses to notify about: missed now, and not yet missed when the user last swiped
+  /// the notification away. Those already were, so that swipe discarded them -- and a
+  /// dose missed since then still gets its own notification.
+  static List<Dose> undiscardedMissed(
+    Iterable<Dose> pending,
+    DateTime now,
+    DateTime dismissedThrough,
+  ) =>
+      pending
+          .where((d) =>
+              d.effectiveStatus(now) == DoseStatus.missed &&
+              d.effectiveStatus(dismissedThrough) != DoseStatus.missed)
+          .toList();
+
   /// Doses that rang (or should have) and were never acted on shouldn't just vanish
-  /// once the alarm stops -- keep an ongoing, undismissable notification up for them
-  /// until they're marked taken or skipped.
+  /// once the alarm stops -- keep a notification up for them until they're marked taken
+  /// or skipped, or the user swipes it away.
   Future<void> _updateOutstandingNotification(DateTime now) async {
-    final overdue = (await _db.pendingDosesBefore(now))
-        .where((d) => d.effectiveStatus(now) == DoseStatus.missed)
-        .toList();
+    final overdue = undiscardedMissed(
+      await _db.pendingDosesBefore(now),
+      now,
+      await AlarmBridge.outstandingDismissedThrough(),
+    );
 
     if (overdue.isEmpty) {
       await AlarmBridge.clearOutstandingNotification();
@@ -88,6 +104,7 @@ class DoseScheduler {
     await AlarmBridge.updateOutstandingNotification(
       title: overdue.length == 1 ? '1 dose missed' : '${overdue.length} doses missed',
       text: names,
+      shownAt: now,
     );
   }
 

@@ -243,6 +243,13 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   runs some code (open/resume) — there's no background job keeping it fresh purely from
   time passing while the app sits closed. Acceptable for now since the ringing alarm is
   the primary mechanism; this is the backstop for after that's been seen and ignored/missed.
+  **Swipeable since 2026-11-04** (`OutstandingDismissedReceiver`,
+  `DoseScheduler.undiscardedMissed`): the Today screen only lists today, so an older missed
+  dose could never be resolved, and the notification came back on every app open for days.
+  A swipe now records the `shownAt` of that notification; doses already overdue by then
+  never bring it back, and doses missed later still do. They stay missed in the history
+  (nothing is rewritten). Not in backups, so a restore can show old doses once more.
+  **Not yet verified on hardware.**
 - **GitHub-style adherence grid** (`lib/ui/adherence_grid.dart`) — on the Today screen,
   above the dose list. One column per week, one row per weekday, coloured by taken/total
   for that day (grey = no dose that day, red = fully missed, green shades = partial-to-full).

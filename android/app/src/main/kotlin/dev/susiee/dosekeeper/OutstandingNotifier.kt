@@ -3,6 +3,7 @@ package dev.susiee.dosekeeper
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -10,15 +11,20 @@ import androidx.core.app.NotificationCompat
 
 /**
  * A quiet, ongoing notification for doses that are overdue. Separate from AlarmService's
- * ringing notification: this one has no sound and doesn't take over the screen, but it
- * cannot be swiped away, so a missed dose stays visible even after the alarm itself has
- * been silenced or ignored -- the whole point being that it can't just be forgotten.
+ * ringing notification: this one has no sound and doesn't take over the screen, so a missed
+ * dose stays visible after the alarm itself has been silenced or ignored.
+ *
+ * Swiping it away discards the doses it listed: they stay missed in the history, but never
+ * bring the notification back. Without that it was re-posted on every app open, for days,
+ * for doses too old to appear on the Today screen and so impossible to clear any other way.
  */
 object OutstandingNotifier {
     private const val CHANNEL_ID = "outstanding_doses"
     private const val NOTIFICATION_ID = 4243
+    const val KEY_DISMISSED_THROUGH = "outstanding_dismissed_through"
 
-    fun show(context: Context, title: String, text: String) {
+    /** [shownAt] is the moment the listed doses were worked out, so a swipe discards only those. */
+    fun show(context: Context, title: String, text: String, shownAt: Long) {
         createChannel(context)
 
         val openApp = PendingIntent.getActivity(
@@ -28,15 +34,23 @@ object OutstandingNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // Fires on a user swipe or "clear all", never on our own cancel().
+        val dismissed = PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(context, OutstandingDismissedReceiver::class.java).putExtra(KEY_DISMISSED_THROUGH, shownAt),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setOngoing(true)
             .setAutoCancel(false)
             .setContentIntent(openApp)
+            .setDeleteIntent(dismissed)
             .build()
 
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
@@ -55,11 +69,22 @@ object OutstandingNotifier {
             "Missed doses",
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "Stays until an overdue dose is marked taken or skipped."
+            description = "Stays until an overdue dose is marked taken or skipped, or it's swiped away."
             setSound(null, null)
             enableVibration(false)
         }
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .createNotificationChannel(channel)
+    }
+}
+
+/** Remembers what the user discarded, for the next sync -- the app may not be running now. */
+class OutstandingDismissedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val through = intent.getLongExtra(OutstandingNotifier.KEY_DISMISSED_THROUGH, 0L)
+        context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(OutstandingNotifier.KEY_DISMISSED_THROUGH, through)
+            .apply()
     }
 }

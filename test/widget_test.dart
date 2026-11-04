@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dosekeeper/models/medication.dart';
+import 'package:dosekeeper/services/scheduler.dart';
 import 'package:dosekeeper/ui/adherence_grid.dart';
 import 'package:dosekeeper/ui/medication_edit_page.dart';
 
@@ -120,6 +121,30 @@ void main() {
       final dose = Dose(medicationId: 1, scheduledAt: scheduled);
 
       expect(Dose.fromRow(dose.toRow()).firedAt, isNull);
+    });
+  });
+
+  group('DoseScheduler.undiscardedMissed', () {
+    final seven = DateTime(2026, 11, 2, 7);
+    final dose = Dose(medicationId: 1, scheduledAt: seven);
+    final never = DateTime.fromMillisecondsSinceEpoch(0);
+
+    test('a missed dose notifies until the notification is swiped away', () {
+      final now = DateTime(2026, 11, 4, 12);
+      expect(DoseScheduler.undiscardedMissed([dose], now, never), [dose]);
+      final swiped = seven.add(const Duration(hours: 3));
+      expect(DoseScheduler.undiscardedMissed([dose], now, swiped), isEmpty);
+    });
+
+    test('a dose missed after the swipe still notifies', () {
+      final swiped = seven.add(const Duration(hours: 1)); // inside its grace period
+      final now = seven.add(const Duration(hours: 3));
+      expect(DoseScheduler.undiscardedMissed([dose], now, swiped), [dose]);
+    });
+
+    test('a dose still in its grace period does not notify', () {
+      final now = seven.add(const Duration(hours: 1));
+      expect(DoseScheduler.undiscardedMissed([dose], now, never), isEmpty);
     });
   });
 
