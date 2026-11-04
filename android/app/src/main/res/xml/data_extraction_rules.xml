@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and up. app_flutter is what a debug build unpacks at startup: about 57 MB, over
+     Auto Backup's 25 MB limit, so without this the whole app silently isn't backed up. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="app_flutter" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="app_flutter" />
+    </device-transfer>
+</data-extraction-rules>

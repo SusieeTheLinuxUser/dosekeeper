@@ -19,7 +19,7 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
-v1.1.6 comes from PR #22. `1.1.5-debug` was seen working on the phone on 2026-11-04: the app
+v1.1.7 comes from PR #22. `1.1.5-debug` was seen working on the phone on 2026-11-04: the app
 opens, folder backup ran, and the Google backup switch appears. 1.1.6 moves that switch to a
 file Android doesn't back up, so it reads as off after updating until it's turned on again. No real Google backup has been
 confirmed yet, so check it with `bmgr` (see "Android's Google backup" below) when the phone is
@@ -315,7 +315,9 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   page, off by default). `allowBackup` is fixed at build time, so the choice lives in the
   agent: off hands Android nothing, which also skips phone-to-phone transfer. The switch is a
   file in `noBackupFilesDir`, so a restore can't turn it back on, and the agent re-arms alarms
-  from the restored registry once a restore finishes (untested on hardware). It adds no
+  from the restored registry once a restore finishes (untested on hardware). Backup rules exclude
+  `app_flutter`: a debug build unpacks about 57 MB there, over the 25 MB limit, which is the
+  likely reason Android showed "no data backed up" on the debug-installed phone. It adds no
   network permission or account, since Android does the upload. It isn't a Drive folder of
   readable files: that would need sign-in and network access. Switch seen on hardware; **a real
   backup through it hasn't been confirmed.** Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, switch on and off.
