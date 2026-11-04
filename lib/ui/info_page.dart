@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../services/alarm_bridge.dart';
@@ -8,6 +10,11 @@ class InfoPage extends StatefulWidget {
   const InfoPage({super.key});
 
   static const sourceUrl = 'https://github.com/SusieeTheLinuxUser/dosekeeper';
+
+  /// [roll] is a random number from 0 up to 1. One roll in 10,000 gets the rare line.
+  static String easterEgg(double roll) => roll < 1e-4
+      ? 'You expected an Easter Egg but it was me... Dio!'
+      : 'But nobody came...';
 
   @override
   State<InfoPage> createState() => _InfoPageState();
@@ -22,7 +29,7 @@ class _InfoPageState extends State<InfoPage> {
     if (++_versionTaps % 10 != 0) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('But nobody came...')));
+      ..showSnackBar(SnackBar(content: Text(InfoPage.easterEgg(Random().nextDouble()))));
   }
 
   Future<void> _openSource() async {

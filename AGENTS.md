@@ -312,7 +312,8 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`). The
   source link hands off to the browser with an intent, so release builds still need no
   network permission. Tapping Version 10 times shows "But nobody came...": a deliberate
-  joke about Android's tap-to-become-a-developer, not a leftover.
+  joke about Android's tap-to-become-a-developer, not a leftover. One in 10,000 of those
+  shows a JoJo line instead, also on purpose.
 
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.

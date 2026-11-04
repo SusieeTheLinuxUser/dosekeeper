@@ -187,11 +187,17 @@ void main() {
       await tester.tap(find.text('Version'));
       await tester.pump();
     }
-    expect(find.text('But nobody came...'), findsNothing);
+    expect(find.textContaining(RegExp('nobody came|Dio')), findsNothing);
 
     await tester.tap(find.text('Version'));
     await tester.pump();
-    expect(find.text('But nobody came...'), findsOneWidget);
+    expect(find.textContaining(RegExp('nobody came|Dio')), findsOneWidget);
+  });
+
+  test('the rare easter egg only appears below one in 10,000', () {
+    expect(InfoPage.easterEgg(0), contains('Dio'));
+    expect(InfoPage.easterEgg(1e-4), 'But nobody came...');
+    expect(InfoPage.easterEgg(0.5), 'But nobody came...');
   });
 
   testWidgets('medication notes are available when editing', (tester) async {
