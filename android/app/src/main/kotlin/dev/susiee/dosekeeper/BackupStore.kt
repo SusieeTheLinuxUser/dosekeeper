@@ -23,10 +23,18 @@ object BackupStore {
     private const val PREFS = "dosekeeper_backup"
     private const val KEY_TREE_URI = "tree_uri"
     private const val KEY_LAST_BACKUP_AT = "last_backup_at"
+    private const val KEY_GOOGLE_BACKUP = "google_backup"
     private const val MIME_JSON = "application/json"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun googleBackupEnabled(context: Context) =
+        prefs(context).getBoolean(KEY_GOOGLE_BACKUP, false)
+
+    fun setGoogleBackupEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_GOOGLE_BACKUP, enabled).apply()
+    }
 
     /** Takes a lasting grant on [tree] (survives reboots) and makes it the backup folder. */
     fun setFolder(context: Context, tree: Uri) {

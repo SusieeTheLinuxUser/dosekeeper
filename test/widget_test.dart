@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dosekeeper/models/medication.dart';
 import 'package:dosekeeper/services/scheduler.dart';
 import 'package:dosekeeper/ui/adherence_grid.dart';
+import 'package:dosekeeper/ui/backup_page.dart';
 import 'package:dosekeeper/ui/info_page.dart';
 import 'package:dosekeeper/ui/medication_edit_page.dart';
 
@@ -198,6 +199,29 @@ void main() {
     expect(InfoPage.easterEgg(0), contains('Dio'));
     expect(InfoPage.easterEgg(1e-4), 'But nobody came...');
     expect(InfoPage.easterEgg(0.5), 'But nobody came...');
+  });
+
+  testWidgets('Google backup starts off, and the switch saves the choice', (tester) async {
+    final saved = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('dev.susiee.dosekeeper/alarms'),
+      (call) async {
+        if (call.method == 'backupStatus') return <String, Object?>{};
+        if (call.method == 'googleBackupEnabled') return false;
+        if (call.method == 'setGoogleBackupEnabled') {
+          saved.add((call.arguments as Map)['enabled']);
+        }
+        return true;
+      },
+    );
+    await tester.pumpWidget(MaterialApp(home: BackupPage(scheduler: DoseScheduler())));
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isFalse);
+
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pump();
+    expect(saved, [true]);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isTrue);
   });
 
   testWidgets('medication notes are available when editing', (tester) async {

@@ -15,6 +15,13 @@ class BackupBridge {
     return raw == null ? null : BackupFolderStatus.fromMap(raw);
   }
 
+  /// Whether Android's Google backup may copy app data. Off unless the user turns it on.
+  static Future<bool> googleBackupEnabled() async =>
+      await _channel.invokeMethod<bool>('googleBackupEnabled') ?? false;
+
+  static Future<void> setGoogleBackupEnabled(bool enabled) =>
+      _channel.invokeMethod('setGoogleBackupEnabled', {'enabled': enabled});
+
   static Future<List<String>> list() async =>
       await _channel.invokeListMethod<String>('listBackups') ?? const [];
 

@@ -65,9 +65,8 @@ class _InfoPageState extends State<InfoPage> {
             const ListTile(
               title: Text('Your data'),
               subtitle: Text(
-                'Stored on this phone and in the backup folder you choose. '
-                'DoseKeeper has no account or server, but if Android\'s Google '
-                'backup is on, it may copy app data to your Google account.',
+                'Stored on this phone, plus the backup folder and Google backup '
+                'if you turn them on. DoseKeeper has no account or server.',
               ),
             ),
             const ListTile(

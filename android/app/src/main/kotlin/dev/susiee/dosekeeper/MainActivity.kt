@@ -229,6 +229,13 @@ class MainActivity : FlutterActivity() {
 
                     "backupStatus" -> io(result) { BackupStore.status(this) }
 
+                    "googleBackupEnabled" -> result.success(BackupStore.googleBackupEnabled(this))
+
+                    "setGoogleBackupEnabled" -> {
+                        BackupStore.setGoogleBackupEnabled(this, call.argument<Boolean>("enabled") == true)
+                        result.success(true)
+                    }
+
                     "pickBackupFolder" -> startPicker(
                         result,
                         Intent(Intent.ACTION_OPEN_DOCUMENT_TREE),

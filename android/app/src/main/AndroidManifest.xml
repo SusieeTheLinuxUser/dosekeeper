@@ -18,6 +18,9 @@
     <application
         android:label="DoseKeeper"
         android:name="${applicationName}"
+        android:allowBackup="true"
+        android:backupAgent=".GoogleBackupAgent"
+        android:fullBackupOnly="true"
         android:icon="@mipmap/ic_launcher">
 
         <activity
