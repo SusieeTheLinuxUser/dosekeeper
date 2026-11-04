@@ -237,7 +237,8 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   dose could never be resolved, and the notification came back on every app open for days.
   A swipe now records the `shownAt` of that notification; doses already overdue by then
   never bring it back, and doses missed later still do. They stay missed in the history
-  (nothing is rewritten). Not in backups, so a restore can show old doses once more.
+  (nothing is rewritten). Not in the JSON folder backups, so restoring one can show old
+  doses once more.
   **Verified on hardware 2026-11-04** (1.1.0-debug, installed over the old build with data
   intact): swiped it, closed and reopened the app, and it stayed gone. Still unproven on the
   device: a dose missed *after* a swipe brings it back (unit-tested only). Known, on
@@ -264,7 +265,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 - **`doses.fired_at` tracking** (`AlarmReceiver.kt`, `MainActivity.drainFiredEvents`,
   `AlarmBridge.drainFiredEvents`, `DoseScheduler._applyFiredAlarmEvents`) — records the
   instant the OS delivers the alarm broadcast, independent of the user's response. See
-  "Current state" above for the full story and the on-device verification. This is what
+  "Prior state (2026-09-20)" for the full story and the on-device verification. This is what
   made the overnight test conclusive instead of another "who knows" — proved the morning
   alarm fired exactly on time two nights running, not just that the user eventually
   marked something taken.
@@ -367,7 +368,7 @@ fight the "no account, no server" identity of the app, not just add scope.
 
 ## Best next move
 
-**The overnight test passed and the orphaned-alarm bug is fixed (see "Current state").**
+**The overnight test passed and the orphaned-alarm bug is fixed (see "Prior state (2026-09-22)").**
 Both proven live on hardware, not just in tests. The immediate crisis-driven work is
 done; what's next is judgment, not a fixed checklist:
 
