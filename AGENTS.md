@@ -36,7 +36,8 @@ switch on is unproven (the debug assets, now excluded, are the best guess).
 The emulator is the AVD `dosekeeper-test` (Play Store image), and it opens from T3 Code's
 Device panel. It is the place for anything that uninstalls, since it holds only fake data.
 Before anything destructive, run `adb devices -l` and confirm the target. Put
-`-s emulator-5554` on every command: it only picks the target for that one command.
+`-s emulator-5554` on every command meant for it: it only picks the target for that one
+command. The other adb examples in this file are for the phone, so they don't use it.
 
 ## Earlier: reboot audit (2026-09-24, late)
 
@@ -333,7 +334,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   likely reason Android showed "no data backed up" on the debug-installed phone. It adds no
   network permission or account, since Android does the upload. It isn't a Drive folder of
   readable files: that would need sign-in and network access. Switch seen on hardware; **a real
-  backup through it is confirmed on an emulator only** (see "Current state"). Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, with the switch on: on the emulator, off was rejected with -1002, which we read as an empty backup.
+  backup through it is confirmed on an emulator only** (see "Current state"). Check with `adb -s <serial> shell bmgr backupnow dev.susiee.dosekeeper`, with the switch on: on the emulator, off was rejected with -1002, which we read as an empty backup.
 
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.
