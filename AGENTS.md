@@ -249,7 +249,9 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   A swipe now records the `shownAt` of that notification; doses already overdue by then
   never bring it back, and doses missed later still do. They stay missed in the history
   (nothing is rewritten). Not in backups, so a restore can show old doses once more.
-  **Not yet verified on hardware.**
+  **Verified on hardware 2026-11-04** (1.1.0-debug, installed over the old build with data
+  intact): swiped it, closed and reopened the app, and it stayed gone. Still unproven on the
+  device: a dose missed *after* a swipe brings it back (unit-tested only).
 - **GitHub-style adherence grid** (`lib/ui/adherence_grid.dart`) — on the Today screen,
   above the dose list. One column per week, one row per weekday, coloured by taken/total
   for that day (grey = no dose that day, red = fully missed, green shades = partial-to-full).
