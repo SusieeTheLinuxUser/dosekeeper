@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dosekeeper/models/medication.dart';
 import 'package:dosekeeper/services/scheduler.dart';
 import 'package:dosekeeper/ui/adherence_grid.dart';
+import 'package:dosekeeper/ui/info_page.dart';
 import 'package:dosekeeper/ui/medication_edit_page.dart';
 
 void main() {
@@ -160,6 +162,36 @@ void main() {
     test('steps back across a month boundary from Sunday', () {
       expect(AdherenceGrid.mondayOf(DateTime(2026, 10, 4)), DateTime(2026, 9, 28)); // Sun -> Mon
     });
+  });
+
+  testWidgets('the info page opens the source link, and hides its joke behind 10 taps',
+      (tester) async {
+    final opened = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('dev.susiee.dosekeeper/alarms'),
+      (call) async {
+        if (call.method == 'appVersion') return '1.2.3-debug';
+        if (call.method == 'openUrl') opened.add((call.arguments as Map)['url']);
+        return true;
+      },
+    );
+    await tester.pumpWidget(const MaterialApp(home: InfoPage()));
+    await tester.pump();
+    expect(find.text('1.2.3-debug'), findsOneWidget);
+
+    await tester.tap(find.text('Source code'));
+    await tester.pump();
+    expect(opened, [InfoPage.sourceUrl]);
+
+    for (var i = 0; i < 9; i++) {
+      await tester.tap(find.text('Version'));
+      await tester.pump();
+    }
+    expect(find.text('But nobody came...'), findsNothing);
+
+    await tester.tap(find.text('Version'));
+    await tester.pump();
+    expect(find.text('But nobody came...'), findsOneWidget);
   });
 
   testWidgets('medication notes are available when editing', (tester) async {

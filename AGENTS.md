@@ -309,7 +309,10 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   Also check that the Settings button lands on a sensible screen on ColorOS.
 
 - **Info page** (`lib/ui/info_page.dart`, app-bar info icon) -- version as Android reports
-  it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`).
+  it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`). The
+  source link hands off to the browser with an intent, so release builds still need no
+  network permission. Tapping Version 10 times shows "But nobody came...": a deliberate
+  joke about Android's tap-to-become-a-developer, not a leftover.
 
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.

@@ -4,8 +4,34 @@ import '../services/alarm_bridge.dart';
 
 /// What's installed. The version comes from Android, so it always matches App info,
 /// including the -debug suffix debug builds get (see android/app/build.gradle.kts).
-class InfoPage extends StatelessWidget {
+class InfoPage extends StatefulWidget {
   const InfoPage({super.key});
+
+  static const sourceUrl = 'https://github.com/SusieeTheLinuxUser/dosekeeper';
+
+  @override
+  State<InfoPage> createState() => _InfoPageState();
+}
+
+class _InfoPageState extends State<InfoPage> {
+  final _version = AlarmBridge.appVersion();
+  var _versionTaps = 0;
+
+  /// Android makes you a developer after tapping the build number. Here, nobody came.
+  void _tapVersion() {
+    if (++_versionTaps % 10 != 0) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('But nobody came...')));
+  }
+
+  Future<void> _openSource() async {
+    final opened = await AlarmBridge.openUrl(InfoPage.sourceUrl);
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No browser found to open the link.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -14,16 +40,19 @@ class InfoPage extends StatelessWidget {
           children: [
             ListTile(
               title: const Text('Version'),
+              onTap: _tapVersion,
               subtitle: FutureBuilder<String>(
-                future: AlarmBridge.appVersion(),
+                future: _version,
                 builder: (_, snapshot) => Text(
                   snapshot.data ?? (snapshot.hasError ? 'Unknown' : '…'),
                 ),
               ),
             ),
-            const ListTile(
-              title: Text('Source code'),
-              subtitle: SelectableText('github.com/SusieeTheLinuxUser/dosekeeper'),
+            ListTile(
+              title: const Text('Source code'),
+              subtitle: const Text('github.com/SusieeTheLinuxUser/dosekeeper'),
+              trailing: const Icon(Icons.open_in_new),
+              onTap: _openSource,
             ),
             const ListTile(title: Text('License'), subtitle: Text('MIT')),
             const ListTile(

@@ -191,6 +191,15 @@ class MainActivity : FlutterActivity() {
                         result.success(packageManager.getPackageInfo(packageName, 0).versionName)
                     }
 
+                    "openUrl" -> {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url"))))
+                            result.success(true)
+                        } catch (e: ActivityNotFoundException) {
+                            result.success(false)
+                        }
+                    }
+
                     /** An overdue dose exists -- show/update the reminder. */
                     "updateOutstandingNotification" -> {
                         OutstandingNotifier.show(

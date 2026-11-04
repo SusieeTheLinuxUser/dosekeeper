@@ -77,6 +77,11 @@ class AlarmBridge {
   static Future<String> appVersion() async =>
       await _channel.invokeMethod<String>('appVersion') ?? 'Unknown';
 
+  /// Opens [url] in the browser. The app itself still makes no network requests.
+  /// False if nothing on the phone can open it.
+  static Future<bool> openUrl(String url) async =>
+      await _channel.invokeMethod<bool>('openUrl', {'url': url}) ?? false;
+
   /// Fires a real alarm N seconds out, through the exact same pipeline as a real
   /// dose, to prove end-to-end that it rings on this device.
   static Future<void> testAlarm(int seconds) =>
