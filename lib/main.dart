@@ -14,18 +14,26 @@ class DoseKeeperApp extends StatelessWidget {
   const DoseKeeperApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'DoseKeeper',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF6EE7A8),
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
+  Widget build(BuildContext context) {
+    final colors = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF6EE7A8),
+      brightness: Brightness.dark,
+    );
+    return MaterialApp(
+      title: 'DoseKeeper',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: colors,
+        useMaterial3: true,
+        // The default is the inverse surface: a bright white bar on this dark app.
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: colors.surfaceContainerHighest,
+          contentTextStyle: TextStyle(color: colors.onSurface),
         ),
-        home: const HomeShell(),
-      );
+      ),
+      home: const HomeShell(),
+    );
+  }
 }
 
 class HomeShell extends StatefulWidget {
