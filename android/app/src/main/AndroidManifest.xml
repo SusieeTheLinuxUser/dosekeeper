@@ -18,6 +18,11 @@
     <application
         android:label="DoseKeeper"
         android:name="${applicationName}"
+        android:allowBackup="true"
+        android:backupAgent=".GoogleBackupAgent"
+        android:fullBackupOnly="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher">
 
         <activity
@@ -52,6 +57,10 @@
 
         <receiver
             android:name=".AlarmReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".OutstandingDismissedReceiver"
             android:exported="false" />
 
         <receiver

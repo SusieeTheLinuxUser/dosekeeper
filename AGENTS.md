@@ -17,7 +17,15 @@ That origin is the whole design rationale. **A medication reminder that doesn't 
 is worse than none, because the user trusted it.** Reliability is the product, not a
 feature. Do not trade it away for elegance or convenience.
 
-## Current state (2026-09-24, late)
+## Current state (2026-11-04)
+
+v1.1.7 comes from PR #22. `1.1.5-debug` was seen working on the phone on 2026-11-04: the app
+opens, folder backup ran, and the Google backup switch appears. 1.1.6 moves that switch to a
+file Android doesn't back up, so it reads as off after updating until it's turned on again. No real Google backup has been
+confirmed yet, so check it with `bmgr` (see "Android's Google backup" below) when the phone is
+next on USB.
+
+## Earlier: reboot audit (2026-09-24, late)
 
 **Audit ("ponytail" + leaks) found a critical reboot gap, now fixed.** Android deletes an
 app's alarms on reboot. `BootReceiver` only set a `needs_reschedule` flag, and **nothing
@@ -38,9 +46,9 @@ Also from the audit:
 - **Leak fixed:** `AlarmService` could leak a `MediaPlayer` -- `stop()` throwing (player
   never started, e.g. `prepare()` failed) skipped `release()`, and a failed setup left
   the half-built player unreferenced. Both paths now always release.
-- **Personal data:** the medication's brand name (reveals a health condition) was in this
-  public file; replaced with neutral wording. It's still in git history (3 commits from
-  09-20/09-22); only a history rewrite would remove it -- the user's call, not done.
+- **Personal data:** keep medication names, dose times and dose logs out of this public
+  file. Older commits and PR descriptions still have some. The user decided on 2026-11-04
+  that rewriting history isn't worth it, so don't propose it again.
 - **Dead weight cut:** the reboot flag + `consumeNeedsReschedule` (Kotlin + Dart),
   `Dose.copyWith` and `DoseDatabase.medication()` (no callers), the unused return value of
   `applyPendingAlarmActions`, `LOCKED_BOOT_COMPLETED` (never delivered to a receiver that
@@ -60,8 +68,8 @@ lost.** While trying to hardware-test the low-battery warning (PR #13), an agent
 user to run plain `flutter install`. **`flutter install` always uninstalls the existing
 app first** (in any build mode) -- here before it even found out the release APK it
 defaulted to didn't exist. The uninstall deleted `dosekeeper.db` (both medications and the
-whole dose history, including the 09-21/09-22 `fired_at` rows that proved the overnight
-test), cancelled every armed alarm, and reset all three runtime grants (notifications,
+whole dose history, including the `fired_at` rows that proved the overnight test),
+cancelled every armed alarm, and reset all three runtime grants (notifications,
 exact alarms, battery-optimisation exemption). No backup existed -- the phone was the only
 copy. See the new "Never uninstall" guardrail below; this must not happen again.
 
@@ -71,31 +79,20 @@ DoseKeeper, so nothing was recoverable from there either.
 **Response (same day): backup & restore was built** (see "Implemented"), and the lost
 data was **reconstructed from this repo's own records** into a backup file for the user
 to restore through the new feature. That file was handed to the user directly, **not
-committed** (personal medication data, public repo). What it contains, and how sure it is:
-- Medications: two, both named `Meds`, every day -- one at 07:00, one at 21:30 (as
-  recorded 09-22). Dosage/notes were never recorded, so they're blank.
-- 07:00 doses 09-20..09-24. 09-20 is **skipped** at 13:01 (documented) -- so that day is
-  red, not green. 09-21: taken 19:19, fired 07:00 (documented). 09-22: fired 07:00
-  (documented), outcome not recorded -> taken. 09-23/09-24: not recorded -> taken.
-- 21:30 doses 09-21..09-24, all taken -- the medication existed by 09-22 but its start
-  date was never recorded; 09-21 onwards is a guess.
-- "Taken" rows the docs don't cover have `actionedAt`/`firedAt` null: unknown, not
-  invented. The user asked for the adherence grid to be green; the one documented skip
-  was kept as a skip and flagged to them rather than silently overwritten.
+committed** (personal medication data, public repo). Where the records were silent it left
+timestamps null rather than inventing them, and the one documented skip stayed a skip.
 
-**Recovery verified on hardware (2026-09-24, ~22:30).** Installed with
+**Recovery verified on hardware (2026-09-24).** Installed with
 `adb install -r` (data kept), restored the reconstructed file via Backup & restore.
-`dumpsys alarm` then showed exactly 6 dose alarms: 07:00 and 21:30 on 09-25, 09-26 and
-09-27 (CEST) -- the same shape as before the wipe, no strays. Today screen: both doses
-shown, grid 09-20 red / 09-21..24 green as restored, and no warnings left except a
+`dumpsys alarm` then showed exactly the expected dose alarms for the next 3 days -- the
+same shape as before the wipe, no strays. Today screen: doses and grid as restored, and no
+warnings left except a
 low-battery one -- which turned out to be **faked**: the `dumpsys battery unplug` /
 `set level 15` test commands from earlier had been run and never undone (see the
 "Undo every device fake" guardrail). The phone was really at 97-99% and charging. So also confirmed live: restore re-arms alarms,
 the backup folder is set and the automatic backup isn't failing (neither backup warning
 shows), and the permission warnings were all cleared. The user then fired the debug test
 alarm and reported it works -- the ring pipeline is intact after the permission reset.
-The first real morning alarm after the wipe (09-25 07:00) is still unproven -- check its
-`fired_at` next session.
 
 The low-battery warning (PR #13) is merged but **still not verified on hardware** --
 testing it was interrupted by the wipe. Test it with fake battery readings, no rebuild
@@ -110,18 +107,14 @@ directly: the `dosekeeper-backup-YYYY-MM-DD.json` file in the chosen folder
 
 ## Prior state (2026-09-22)
 
-**The overnight test passed.** `doses` for the 07:00 medication on 09-21 and 09-22 both
-show `fired_at` matching the scheduled time exactly (`2026-09-21 07:00` and
-`2026-09-22 07:00`), meaning `setAlarmClock` survived two full unattended nights of
+**The overnight test passed.** `doses` for two mornings in a row show `fired_at` matching
+the scheduled time exactly, meaning `setAlarmClock` survived two full unattended nights of
 ColorOS Doze on its own and rang on time both mornings. This is the milestone the whole
-project existed to prove, and it held. (09-21's dose wasn't marked `taken` until 19:19
-that evening -- 12 hours after it fired -- which is a human-behaviour gap, not an alarm
-bug: `fired_at` proves the alarm itself rang exactly on time regardless of when the user
-got around to acknowledging it.)
+project existed to prove, and it held. (`fired_at` proves the alarm broadcast arrived on time, whenever the user got round to acknowledging it.)
 
 **A second, self-inflicted bug was found and fixed the same day (PR #7): orphaned dose
-alarms.** The user reported "there's an alarm at 9:30 I can't remove" -- and `dumpsys
-alarm` confirmed a real `AlarmManager` alarm genuinely armed for `2026-09-23 09:30`, with
+alarms.** The user reported "there's an alarm I can't remove" -- and `dumpsys
+alarm` confirmed a real `AlarmManager` alarm genuinely armed, with
 no corresponding time anywhere in the medication editor. Root cause: editing a
 medication's schedule only ever *added* doses for the times that remained -- editing out
 a time never cancelled or deleted the already-materialised doses for the *removed* time.
@@ -131,8 +124,7 @@ medication currently listed. Fixed with `Medication.coversSlot()` (a pure check)
 `DoseScheduler._reconcileOrphanedDoses()` (runs on every `sync()`, cancels + deletes any
 pending dose that fails it -- historical/already-actioned doses are left untouched, they're
 an honest record of what really happened). Verified live: `dumpsys alarm` showed the
-phantom alarm before the fix and confirmed it gone (exactly the right 6 alarms,
-07:00/21:30 only) after installing the fix and launching the app once.
+phantom alarm before the fix and confirmed it gone (exactly the right alarms) after installing the fix and launching the app once.
 
 Two real, hardware-verified bugs found and fixed in three days of actual use. That's
 what this project is for -- keep testing like this, don't assume "it built and passed
@@ -146,8 +138,8 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 
 - `flutter analyze` clean, 10 unit tests passing, debug APK builds and installs, CI green.
 - **A real dose was missed with no way to tell why -- root cause of everything below.**
-  Checked the on-device dose history: the 07:00 dose was marked
-  `skipped`, `actioned_at` 13:01 -- six hours late, and completely ambiguous. Did the
+  Checked the on-device dose history: the dose was marked `skipped`, hours late, and
+  completely ambiguous. Did the
   alarm never ring (a real bug, the exact failure mode this app exists to catch), or did
   it ring and get dealt with hours later (a human choice, not a bug at all)? The database
   only recorded what the *user* did, never whether the *alarm* itself fired. No way to
@@ -164,7 +156,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   (alarm may not have rung)" vs. plain "missed" using this. Merged as PR #5.
   **This directly unblocks the overnight test** (see "Best next move") -- without it, an
   overnight failure would have been just as unexplainable as today's was.
-- **First real-world alarm test (2026-09-20, 09:00): partial success, one real bug found.**
+- **First real-world alarm test (2026-09-20): partial success, one real bug found.**
   Three test medications (leftover from earlier manual testing, all coincidentally at
   09:00) fired while the user was actively using another app (scrolling, phone unlocked)
   — the full-screen intent correctly took over the screen and interrupted them, which is
@@ -223,7 +215,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
     is intentionally a no-op. Writes TAKEN/SNOOZE to SharedPreferences.
   - `AlarmReceiver.kt` / `BootReceiver.kt` — receiver hands straight off to the service
     (~10s limit); boot receiver re-arms every alarm from `AlarmScheduler`'s native
-    registry (incl. OEM quickboot actions) -- see "Current state" for why.
+    registry (incl. OEM quickboot actions) -- see "Earlier: reboot audit" for why.
   - `MainActivity.kt` — MethodChannel `dev.susiee.dosekeeper/alarms`.
 - **Dart side** — `models/medication.dart` (Medication, Dose, status logic),
   `data/database.dart` (SQLite), `services/scheduler.dart` (materialises doses 3 days ahead,
@@ -233,16 +225,29 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   optimisation is on, or notification permission is denied, with one-tap links to the
   system settings/dialogs that fix each.
 - **Persistent missed-dose notification** (`OutstandingNotifier.kt`, `DoseScheduler._updateOutstandingNotification`)
-  — an ongoing, non-swipeable notification (separate channel from the ringing alarm,
+  — a notification (separate channel from the ringing alarm,
   no sound) that shows whenever any dose is past its 2h missed-grace period and still
   pending. Recomputed on every `sync()` call (app open, resume, after saving a med, after
   marking a dose), so it clears itself once the dose is marked taken/skipped. Verified on
   device by inserting a fake overdue dose directly into the SQLite DB: notification
-  appeared with the right medication name, survived a swipe-to-dismiss gesture, and
-  cleared once the fake row was removed. Known gap: only updates when the app actually
+  appeared with the right medication name and cleared once the fake row was removed.
+  (That build also couldn't be swiped away; see below.) Known gap: only updates when the app actually
   runs some code (open/resume) — there's no background job keeping it fresh purely from
   time passing while the app sits closed. Acceptable for now since the ringing alarm is
   the primary mechanism; this is the backstop for after that's been seen and ignored/missed.
+  **Swipeable since 2026-11-04** (`OutstandingDismissedReceiver`,
+  `DoseScheduler.undiscardedMissed`): the Today screen only lists today, so an older missed
+  dose could never be resolved, and the notification came back on every app open for days.
+  A swipe now records the `shownAt` of that notification; doses already overdue by then
+  never bring it back, and doses missed later still do. They stay missed in the history
+  (nothing is rewritten). Not in the JSON folder backups, so restoring one can show old
+  doses once more.
+  **Verified on hardware 2026-11-04** (1.1.0-debug, installed over the old build with data
+  intact): swiped it, closed and reopened the app, and it stayed gone. Still unproven on the
+  device: a dose missed *after* a swipe brings it back (unit-tested only). Known, on
+  purpose: a dose back-filled after a swipe (a medication added or edited with a time up to
+  12h ago, which never had an alarm) doesn't notify if it was already overdue when the swiped
+  notification was shown. The Today screen still lists it.
 - **GitHub-style adherence grid** (`lib/ui/adherence_grid.dart`) — on the Today screen,
   above the dose list. One column per week, one row per weekday, coloured by taken/total
   for that day (grey = no dose that day, red = fully missed, green shades = partial-to-full).
@@ -263,8 +268,8 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 - **`doses.fired_at` tracking** (`AlarmReceiver.kt`, `MainActivity.drainFiredEvents`,
   `AlarmBridge.drainFiredEvents`, `DoseScheduler._applyFiredAlarmEvents`) — records the
   instant the OS delivers the alarm broadcast, independent of the user's response. See
-  "Current state" above for the full story and the on-device verification. This is what
-  made the overnight test conclusive instead of another "who knows" — proved the 07:00
+  "Prior state (2026-09-20)" for the full story and the on-device verification. This is what
+  made the overnight test conclusive instead of another "who knows" — proved the morning
   alarm fired exactly on time two nights running, not just that the user eventually
   marked something taken.
 - **Orphaned-dose reconciliation** (`Medication.coversSlot`,
@@ -299,6 +304,24 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   ```
   Also check that the Settings button lands on a sensible screen on ColorOS.
 
+- **Info page** (`lib/ui/info_page.dart`, app-bar info icon) -- version as Android reports
+  it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`). The
+  source link hands off to the browser with an intent, so release builds still need no
+  network permission. Tapping Version 10 times shows "But nobody came...": a deliberate
+  joke about Android's tap-to-become-a-developer, not a leftover. One in 10,000 of those
+  shows a JoJo line instead, also on purpose.
+
+- **Android's Google backup is opt-in** (`GoogleBackupAgent`, switch on the Backup & restore
+  page, off by default). `allowBackup` is fixed at build time, so the choice lives in the
+  agent: off hands Android nothing, which also skips phone-to-phone transfer. The switch is a
+  file in `noBackupFilesDir`, so a restore can't turn it back on, and the agent re-arms alarms
+  from the restored registry once a restore finishes (untested on hardware). Backup rules exclude
+  `app_flutter`: a debug build unpacks about 57 MB there, over the 25 MB limit, which is the
+  likely reason Android showed "no data backed up" on the debug-installed phone. It adds no
+  network permission or account, since Android does the upload. It isn't a Drive folder of
+  readable files: that would need sign-in and network access. Switch seen on hardware; **a real
+  backup through it hasn't been confirmed.** Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, switch on and off.
+
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.
   - Where: a folder the **user picks** via the Storage Access Framework (no storage
@@ -319,7 +342,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
     cancels every armed alarm (incl. snoozes) so no orphaned alarm survives it.
   - Today screen warns "Backups are off" (no folder / permission gone) and "Automatic
     backup failed: …", same pattern as the alarm-path warnings.
-  - Restore verified on hardware 2026-09-24; see "Current state" for what's left.
+  - Restore verified on hardware 2026-09-24; see "Earlier on 2026-09-24" for what's left.
 
 ### Not implemented yet
 
@@ -352,7 +375,7 @@ fight the "no account, no server" identity of the app, not just add scope.
 
 ## Best next move
 
-**The overnight test passed and the orphaned-alarm bug is fixed (see "Current state").**
+**The overnight test passed and the orphaned-alarm bug is fixed (see "Prior state (2026-09-22)").**
 Both proven live on hardware, not just in tests. The immediate crisis-driven work is
 done; what's next is judgment, not a fixed checklist:
 
@@ -375,9 +398,6 @@ done; what's next is judgment, not a fixed checklist:
   ```
   Also worth `adb shell dumpsys alarm | grep dev.susiee.dosekeeper` periodically -- that's
   what caught the orphaned alarm, comparing what's *armed* against what's *supposed to be*.
-- **Minor, non-urgent:** before the 09-24 wipe both real medications were named `Meds`
-  (07:00 and 21:30), which was easy to confuse. If they got re-added under the same
-  name, suggest distinct names next time it comes up naturally.
 - **New features, from "Future feature ideas" above, once the user wants one** -- nothing
   there is urgent or reliability-critical, so let the user's actual pain points pick the
   order rather than assuming one.
@@ -390,7 +410,7 @@ done; what's next is judgment, not a fixed checklist:
   trusting software. Until alarms are verified over several real days, say plainly that
   they should keep a backup reminder.
 - **Test on the real device**, not just an emulator — OEM battery-killing is the entire
-  problem class here. User's phone is OnePlus/Oppo **ColorOS** (`CPH2747`), one of the
+  problem class here. User's phone is OnePlus/Oppo **ColorOS**, one of the
   worst offenders (see dontkillmyapp.com).
 - **Never uninstall the app on the user's phone, and never run a command that does.**
   The on-device DB is the only copy of their medications and dose history, and an
@@ -410,7 +430,7 @@ done; what's next is judgment, not a fixed checklist:
   with the release key when `android/key.properties` exists (see "Releases"), so it can't
   replace the debug-signed copy on the phone -- and an uninstall to "fix" that is the wipe. No
   `adb uninstall`, no `pm clear`. If an install fails, stop and ask -- the "fix" is an uninstall, which is the
-  wipe. This already happened once (2026-09-24, see "Current state") and cost the user
+  wipe. This already happened once (see "Earlier on 2026-09-24") and cost the user
   all their data.
 - **Undo every device fake in the same breath.** Any command that changes the phone's
   state for a test (`adb shell dumpsys battery unplug`/`set level`, `settings put`, `cmd`
@@ -425,7 +445,7 @@ done; what's next is judgment, not a fixed checklist:
 
 ## Environment
 
-- Flutter 3.47.4, Dart 3.13.3 at `/home/susiee/development/flutter/bin/flutter`
+- Flutter 3.47.4, Dart 3.13.3 at `~/development/flutter/bin/flutter`
 - Android SDK at `~/Android/Sdk` (platforms 34/35/36), Java 26, `adb` on PATH
 - No Android Studio — build via `flutter build apk --debug`, install via
   `adb install -r build/app/outputs/flutter-apk/app-debug.apk` (**never** `flutter install`
@@ -457,6 +477,12 @@ done; what's next is judgment, not a fixed checklist:
 - **The phone runs a debug-signed build.** A release APK can't install over it (Android
   refuses: different signature). Moving the phone to release builds means Settings → backup,
   uninstall, install the release, restore -- the user's decision, never an agent's.
+
+- **Dev builds for testing away from the desk:** a pre-release from the `dev` branch, tagged
+  `dev-X.Y.Z`. Not `vX.Y.Z-anything`: `release.yml` matches `v*.*.*`, and would publish it as
+  a stable release. The debug APK must be built **on the user's machine**: only its
+  `~/.android/debug.keystore` matches the phone. A CI debug build has a different key and
+  won't install, and the "fix" for that is the wipe.
 
 ## Git workflow
 

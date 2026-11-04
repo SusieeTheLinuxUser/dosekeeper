@@ -43,11 +43,12 @@ See [dontkillmyapp.com](https://dontkillmyapp.com) for per-manufacturer steps.
 - Doses marked taken/skipped, with missed doses detected after a grace period
 - Everything stored locally in SQLite
 
-- Persistent, undismissable notification for any dose still outstanding past its
-  grace period, so it can't be swiped away and forgotten
+- Persistent notification for any dose still outstanding past its grace period,
+  until it's marked taken or skipped or you swipe the notification away
 - A GitHub-style adherence grid on the Today screen
 - Automatic daily backups to a folder you choose (it survives uninstalling the app),
   and restore from a backup file
+- Optional Android Google backup, off unless you turn it on
 
 Planned: a dose history view, editing/pausing a medication without deleting it.
 

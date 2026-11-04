@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dosekeeper/models/medication.dart';
+import 'package:dosekeeper/services/scheduler.dart';
 import 'package:dosekeeper/ui/adherence_grid.dart';
+import 'package:dosekeeper/ui/backup_page.dart';
+import 'package:dosekeeper/ui/info_page.dart';
 import 'package:dosekeeper/ui/medication_edit_page.dart';
 
 void main() {
@@ -123,6 +127,30 @@ void main() {
     });
   });
 
+  group('DoseScheduler.undiscardedMissed', () {
+    final seven = DateTime(2026, 11, 2, 7);
+    final dose = Dose(medicationId: 1, scheduledAt: seven);
+    final never = DateTime.fromMillisecondsSinceEpoch(0);
+
+    test('a missed dose notifies until the notification is swiped away', () {
+      final now = DateTime(2026, 11, 4, 12);
+      expect(DoseScheduler.undiscardedMissed([dose], now, never), [dose]);
+      final swiped = seven.add(const Duration(hours: 3));
+      expect(DoseScheduler.undiscardedMissed([dose], now, swiped), isEmpty);
+    });
+
+    test('a dose missed after the swipe still notifies', () {
+      final swiped = seven.add(const Duration(hours: 1)); // inside its grace period
+      final now = seven.add(const Duration(hours: 3));
+      expect(DoseScheduler.undiscardedMissed([dose], now, swiped), [dose]);
+    });
+
+    test('a dose still in its grace period does not notify', () {
+      final now = seven.add(const Duration(hours: 1));
+      expect(DoseScheduler.undiscardedMissed([dose], now, never), isEmpty);
+    });
+  });
+
   group('AdherenceGrid.mondayOf', () {
     test('steps back to Monday from mid-week', () {
       expect(AdherenceGrid.mondayOf(DateTime(2026, 9, 24)), DateTime(2026, 9, 21)); // Thu -> Mon
@@ -135,6 +163,65 @@ void main() {
     test('steps back across a month boundary from Sunday', () {
       expect(AdherenceGrid.mondayOf(DateTime(2026, 10, 4)), DateTime(2026, 9, 28)); // Sun -> Mon
     });
+  });
+
+  testWidgets('the info page opens the source link, and hides its joke behind 10 taps',
+      (tester) async {
+    final opened = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('dev.susiee.dosekeeper/alarms'),
+      (call) async {
+        if (call.method == 'appVersion') return '1.2.3-debug';
+        if (call.method == 'openUrl') opened.add((call.arguments as Map)['url']);
+        return true;
+      },
+    );
+    await tester.pumpWidget(const MaterialApp(home: InfoPage()));
+    await tester.pump();
+    expect(find.text('1.2.3-debug'), findsOneWidget);
+
+    await tester.tap(find.text('Source code'));
+    await tester.pump();
+    expect(opened, [InfoPage.sourceUrl]);
+
+    for (var i = 0; i < 9; i++) {
+      await tester.tap(find.text('Version'));
+      await tester.pump();
+    }
+    expect(find.textContaining(RegExp('nobody came|Dio')), findsNothing);
+
+    await tester.tap(find.text('Version'));
+    await tester.pump();
+    expect(find.textContaining(RegExp('nobody came|Dio')), findsOneWidget);
+  });
+
+  test('the rare easter egg only appears below one in 10,000', () {
+    expect(InfoPage.easterEgg(0), contains('Dio'));
+    expect(InfoPage.easterEgg(1e-4), 'But nobody came...');
+    expect(InfoPage.easterEgg(0.5), 'But nobody came...');
+  });
+
+  testWidgets('Google backup starts off, and the switch saves the choice', (tester) async {
+    final saved = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('dev.susiee.dosekeeper/alarms'),
+      (call) async {
+        if (call.method == 'backupStatus') return <String, Object?>{};
+        if (call.method == 'googleBackupEnabled') return false;
+        if (call.method == 'setGoogleBackupEnabled') {
+          saved.add((call.arguments as Map)['enabled']);
+        }
+        return true;
+      },
+    );
+    await tester.pumpWidget(MaterialApp(home: BackupPage(scheduler: DoseScheduler())));
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isFalse);
+
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pump();
+    expect(saved, [true]);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isTrue);
   });
 
   testWidgets('medication notes are available when editing', (tester) async {

@@ -187,14 +187,36 @@ class MainActivity : FlutterActivity() {
                         result.success(out)
                     }
 
-                    /** An overdue dose exists -- show/update the undismissable reminder. */
+                    "appVersion" -> {
+                        result.success(packageManager.getPackageInfo(packageName, 0).versionName)
+                    }
+
+                    "openUrl" -> {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url"))))
+                            result.success(true)
+                        } catch (e: ActivityNotFoundException) {
+                            result.success(false)
+                        }
+                    }
+
+                    /** An overdue dose exists -- show/update the reminder. */
                     "updateOutstandingNotification" -> {
                         OutstandingNotifier.show(
                             this,
                             title = call.argument<String>("title") ?: "Missed dose",
                             text = call.argument<String>("text") ?: "",
+                            shownAt = call.argument<Number>("shownAt")?.toLong() ?: 0L,
                         )
                         result.success(true)
+                    }
+
+                    /** Doses overdue by this time were swiped away by the user; 0 if none. */
+                    "outstandingDismissedThrough" -> {
+                        result.success(
+                            getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+                                .getLong(OutstandingNotifier.KEY_DISMISSED_THROUGH, 0L),
+                        )
                     }
 
                     /** No more overdue doses -- clear the reminder. */
@@ -206,6 +228,13 @@ class MainActivity : FlutterActivity() {
                     // --- backups (see BackupStore for why a user-picked folder) ---
 
                     "backupStatus" -> io(result) { BackupStore.status(this) }
+
+                    "googleBackupEnabled" -> result.success(BackupStore.googleBackupEnabled(this))
+
+                    "setGoogleBackupEnabled" -> {
+                        BackupStore.setGoogleBackupEnabled(this, call.argument<Boolean>("enabled") == true)
+                        result.success(true)
+                    }
 
                     "pickBackupFolder" -> startPicker(
                         result,

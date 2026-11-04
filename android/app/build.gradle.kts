@@ -49,6 +49,10 @@ android {
     }
 
     buildTypes {
+        // Name only. No applicationIdSuffix: that would install as a separate, empty app.
+        debug {
+            versionNameSuffix = "-debug"
+        }
         release {
             signingConfig = signingConfigs.getByName(if (hasReleaseSigning) "release" else "debug")
         }

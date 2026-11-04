@@ -20,6 +20,7 @@ class BackupPage extends StatefulWidget {
 class _BackupPageState extends State<BackupPage> {
   final _service = BackupService.instance;
   BackupFolderStatus? _status;
+  bool _googleBackup = false;
   bool _busy = false;
 
   @override
@@ -30,7 +31,13 @@ class _BackupPageState extends State<BackupPage> {
 
   Future<void> _load() async {
     final status = await BackupBridge.status();
-    if (mounted) setState(() => _status = status);
+    final googleBackup = await BackupBridge.googleBackupEnabled();
+    if (mounted) {
+      setState(() {
+        _status = status;
+        _googleBackup = googleBackup;
+      });
+    }
   }
 
   /// Runs [work] with the buttons disabled, reporting any failure instead of
@@ -188,7 +195,25 @@ class _BackupPageState extends State<BackupPage> {
                   icon: const Icon(Icons.restore),
                   label: const Text('Restore from a backup file'),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Android\'s Google backup'),
+                  subtitle: const Text(
+                    'Optional, and separate from the folder above. Lets Android copy '
+                    'your medications and history to your Google account. Google '
+                    'backup must also be on in your phone\'s settings, and Android '
+                    'decides when it runs. Turning this off stops new copies, and '
+                    'also Android\'s phone-to-phone transfer; it can\'t delete a copy '
+                    'Google already has.',
+                  ),
+                  value: _googleBackup,
+                  onChanged: (on) async {
+                    await BackupBridge.setGoogleBackupEnabled(on);
+                    if (mounted) setState(() => _googleBackup = on);
+                  },
+                ),
+                const SizedBox(height: 16),
                 Text(
                   'DoseKeeper saves one backup file per day in the folder you choose, '
                   'updated every time the app opens or you change something. The last '

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
+import java.io.File
 import java.io.FileNotFoundException
 
 /**
@@ -27,6 +28,20 @@ object BackupStore {
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /**
+     * A file in the no-backup folder, not a preference: backups include preferences, so
+     * restoring an old one could silently turn this back on after the user turned it off.
+     */
+    private fun googleBackupMarker(context: Context) =
+        File(context.noBackupFilesDir, "google_backup_on")
+
+    fun googleBackupEnabled(context: Context) = googleBackupMarker(context).exists()
+
+    fun setGoogleBackupEnabled(context: Context, enabled: Boolean) {
+        val marker = googleBackupMarker(context)
+        if (enabled) marker.createNewFile() else marker.delete()
+    }
 
     /** Takes a lasting grant on [tree] (survives reboots) and makes it the backup folder. */
     fun setFolder(context: Context, tree: Uri) {
