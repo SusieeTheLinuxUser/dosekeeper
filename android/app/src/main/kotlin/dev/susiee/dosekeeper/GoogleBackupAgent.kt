@@ -16,6 +16,15 @@ class GoogleBackupAgent : BackupAgent() {
         if (BackupStore.googleBackupEnabled(this)) super.onFullBackup(data)
     }
 
+    /**
+     * Android restores data on install, before the app first runs, and doesn't restore
+     * alarms. Without this no dose would ring until the app is opened. Caught so that an
+     * alarm failure can't fail the restore itself: opening the app re-arms them anyway.
+     */
+    override fun onRestoreFinished() {
+        runCatching { AlarmScheduler.rearmAll(this) }
+    }
+
     // Key-value backup: never used, the manifest sets fullBackupOnly.
     override fun onBackup(
         oldState: ParcelFileDescriptor?,

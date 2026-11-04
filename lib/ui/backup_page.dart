@@ -203,8 +203,9 @@ class _BackupPageState extends State<BackupPage> {
                     'Optional, and separate from the folder above. Lets Android copy '
                     'your medications and history to your Google account. Google '
                     'backup must also be on in your phone\'s settings, and Android '
-                    'decides when it runs. Turning this off stops new copies; it '
-                    'can\'t delete one Google already has.',
+                    'decides when it runs. Turning this off stops new copies, and '
+                    'also Android\'s phone-to-phone transfer; it can\'t delete a copy '
+                    'Google already has.',
                   ),
                   value: _googleBackup,
                   onChanged: (on) async {

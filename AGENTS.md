@@ -19,8 +19,9 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
-v1.1.5 comes from PR #22. The phone runs `1.1.5-debug`, seen working on 2026-11-04: the app
-opens, folder backup ran, and the Google backup switch is on. No real Google backup has been
+v1.1.6 comes from PR #22. `1.1.5-debug` was seen working on the phone on 2026-11-04: the app
+opens, folder backup ran, and the Google backup switch appears. 1.1.6 moves that switch to a
+file Android doesn't back up, so it reads as off after updating until it's turned on again. No real Google backup has been
 confirmed yet, so check it with `bmgr` (see "Android's Google backup" below) when the phone is
 next on USB.
 
@@ -109,7 +110,7 @@ directly: the `dosekeeper-backup-YYYY-MM-DD.json` file in the chosen folder
 **The overnight test passed.** `doses` for two mornings in a row show `fired_at` matching
 the scheduled time exactly, meaning `setAlarmClock` survived two full unattended nights of
 ColorOS Doze on its own and rang on time both mornings. This is the milestone the whole
-project existed to prove, and it held. (`fired_at` proves the alarm rang on time, whenever the user got round to acknowledging it.)
+project existed to prove, and it held. (`fired_at` proves the alarm broadcast arrived on time, whenever the user got round to acknowledging it.)
 
 **A second, self-inflicted bug was found and fixed the same day (PR #7): orphaned dose
 alarms.** The user reported "there's an alarm I can't remove" -- and `dumpsys
@@ -312,7 +313,9 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 
 - **Android's Google backup is opt-in** (`GoogleBackupAgent`, switch on the Backup & restore
   page, off by default). `allowBackup` is fixed at build time, so the choice lives in the
-  agent: off hands Android nothing, which also skips phone-to-phone transfer. It adds no
+  agent: off hands Android nothing, which also skips phone-to-phone transfer. The switch is a
+  file in `noBackupFilesDir`, so a restore can't turn it back on, and the agent re-arms alarms
+  from the restored registry once a restore finishes (untested on hardware). It adds no
   network permission or account, since Android does the upload. It isn't a Drive folder of
   readable files: that would need sign-in and network access. Switch seen on hardware; **a real
   backup through it hasn't been confirmed.** Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, switch on and off.
