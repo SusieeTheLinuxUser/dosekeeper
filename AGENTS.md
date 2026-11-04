@@ -19,11 +19,22 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
-v1.1.7 comes from PR #22. `1.1.5-debug` was seen working on the phone on 2026-11-04: the app
-opens, folder backup ran, and the Google backup switch appears. 1.1.6 moves that switch to a
-file Android doesn't back up, so it reads as off after updating until it's turned on again. No real Google backup has been
-confirmed yet, so check it with `bmgr` (see "Android's Google backup" below) when the phone is
-next on USB.
+v1.1.7 was merged to `master` (PR #22) but has no `v1.1.7` tag or stable release yet: the
+user may release it later. `1.1.7-debug` is on the phone, with the Google backup switch off.
+
+Google backup on a stock Android 16 emulator (2026-11-04), with a signed-in spare account:
+switch on, `bmgr backupnow` succeeds, about 36 KB. **Switch off, it reports "Transport
+rejected package because it wasn't able to process it at the time" (-1002). That is expected:
+it is what an empty backup looks like, not a bug.** Google states no reason, but every empty
+run was rejected and every run with data succeeded, across debug and release builds and
+faked installers. An agent wrongly blamed `GoogleBackupAgent` for this after only testing
+with the switch off, so **always test with the switch on**. Not done yet: a run with the
+switch on on the real phone, and any restore. Why 1.1.5 showed "no data backed up" with the
+switch on is unproven (the debug assets, now excluded, are the best guess).
+
+The emulator is the AVD `dosekeeper-test` (Play Store image), and it opens from T3 Code's
+Device panel. It is the place for anything that uninstalls, since it holds only fake data.
+Always aim adb at it with `-s emulator-5554`, so nothing can reach the phone.
 
 ## Earlier: reboot audit (2026-09-24, late)
 
@@ -320,7 +331,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   likely reason Android showed "no data backed up" on the debug-installed phone. It adds no
   network permission or account, since Android does the upload. It isn't a Drive folder of
   readable files: that would need sign-in and network access. Switch seen on hardware; **a real
-  backup through it hasn't been confirmed.** Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, switch on and off.
+  backup through it is confirmed on an emulator only** (see "Current state"). Check with `adb shell bmgr backupnow dev.susiee.dosekeeper`, with the switch on: off is rejected as empty.
 
 - **Backup & restore** (`BackupStore.kt`, `lib/services/backup_*.dart`,
   `lib/ui/backup_page.dart`, app-bar backup icon) — built after the 2026-09-24 wipe.
