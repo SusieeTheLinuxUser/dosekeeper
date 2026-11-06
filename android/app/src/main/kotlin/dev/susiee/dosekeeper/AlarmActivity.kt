@@ -99,14 +99,14 @@ class AlarmActivity : Activity() {
     private fun finishWith(action: PendingAction) {
         val now = System.currentTimeMillis()
         if (action == PendingAction.SNOOZE) {
-            val refused = doses.count {
-                !AlarmScheduler.schedule(this, it.id, now + SNOOZE_MS, it.name, it.dosage)
+            val snoozed = doses.filter {
+                AlarmScheduler.schedule(this, it.id, now + SNOOZE_MS, it.name, it.dosage)
             }
             // Android refused a snooze alarm. Stopping now would mean that dose never rings
-            // again, so keep ringing and say so.
-            // ponytail: the snoozes that did arm stay armed; Taken next would still ring
-            // them once in 10 min. Roll them back if partial refusals ever show up.
-            if (refused > 0) {
+            // again, so keep ringing and say so. Undo the snoozes that did arm: tapping Taken
+            // next would otherwise ring them again in 10 minutes.
+            if (snoozed.size < doses.size) {
+                snoozed.forEach { AlarmScheduler.disarm(this, it.id) }
                 Toast.makeText(this, "Couldn't snooze. Take it now, or try again.", Toast.LENGTH_LONG).show()
                 return
             }

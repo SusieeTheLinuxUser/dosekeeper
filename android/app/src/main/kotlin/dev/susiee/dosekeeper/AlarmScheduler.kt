@@ -87,11 +87,16 @@ object AlarmScheduler {
     }
 
     fun cancel(context: Context, doseId: Long) {
+        disarm(context, doseId)
+        AlarmService.cancelFallback(context, doseId)
+    }
+
+    /** Cancels the alarm only. A fallback notification that's ringing keeps ringing. */
+    fun disarm(context: Context, doseId: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         broadcast(context, doseId, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
             ?.let { am.cancel(it); it.cancel() }
         forget(context, doseId)
-        AlarmService.cancelFallback(context, doseId)
     }
 
     // --- surviving a reboot ---
