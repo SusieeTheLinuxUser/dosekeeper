@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 
 /**
  * The ringing alarm screen. Appears over the lockscreen with the screen turned on.
@@ -81,23 +82,29 @@ class AlarmActivity : Activity() {
      * Flutter engine may not be running at all when the alarm fires.
      */
     private fun finishWith(action: PendingAction) {
-        getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString("pending_action_$doseId", action.name)
-            .putLong("pending_action_at_$doseId", System.currentTimeMillis())
-            .apply()
-
         if (action == PendingAction.SNOOZE) {
             val medName = intent.getStringExtra(AlarmScheduler.EXTRA_MED_NAME) ?: "Medication"
             val dosage = intent.getStringExtra(AlarmScheduler.EXTRA_DOSAGE) ?: ""
-            AlarmScheduler.schedule(
+            val snoozed = AlarmScheduler.schedule(
                 this,
                 doseId,
                 System.currentTimeMillis() + SNOOZE_MS,
                 medName,
                 dosage,
             )
+            // Android refused the snooze alarm. Stopping now would mean this dose never
+            // rings again, so keep ringing and say so.
+            if (!snoozed) {
+                Toast.makeText(this, "Couldn't snooze. Take it now, or try again.", Toast.LENGTH_LONG).show()
+                return
+            }
         }
+
+        getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("pending_action_$doseId", action.name)
+            .putLong("pending_action_at_$doseId", System.currentTimeMillis())
+            .apply()
 
         AlarmService.stop(this)
         finish()

@@ -303,7 +303,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   Before, one throw became a `PlatformException` that stopped `sync()` (later doses unarmed,
   Today stuck loading) and stopped a reboot re-arm part way. `DoseScheduler.unarmedAlarms`
   counts refusals per sync and Today shows "Android refused N alarms" with a Retry, since a
-  refused alarm never rings. A failed snooze is only logged. Not reproduced on a device:
+  refused alarm never rings. A refused snooze keeps the alarm ringing, with a toast. Not reproduced on a device:
   hard to force a refusal.
 
 - **Low-battery warning** (`MainActivity` `isBatteryLow`/`openBatterySettings`,
