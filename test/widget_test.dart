@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dosekeeper/models/medication.dart';
+import 'package:dosekeeper/services/alarm_bridge.dart';
 import 'package:dosekeeper/services/scheduler.dart';
 import 'package:dosekeeper/ui/adherence_grid.dart';
 import 'package:dosekeeper/ui/backup_page.dart';
@@ -193,6 +194,21 @@ void main() {
     await tester.tap(find.text('Version'));
     await tester.pump();
     expect(find.textContaining(RegExp('nobody came|Dio')), findsOneWidget);
+  });
+
+  testWidgets('an alarm Android refused reads as not armed', (tester) async {
+    Object? reply = false;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('dev.susiee.dosekeeper/alarms'),
+      (call) async => reply,
+    );
+    Future<bool> arm() => AlarmBridge.scheduleDose(
+        doseId: 1, triggerAt: DateTime(2030), medName: 'Meds', dosage: '');
+    expect(await arm(), isFalse);
+    reply = null;
+    expect(await arm(), isFalse);
+    reply = true;
+    expect(await arm(), isTrue);
   });
 
   test('the rare easter egg only appears below one in 10,000', () {

@@ -4,18 +4,20 @@ import 'package:flutter/services.dart';
 class AlarmBridge {
   static const _channel = MethodChannel('dev.susiee.dosekeeper/alarms');
 
-  static Future<void> scheduleDose({
+  /// False if Android refused the alarm (e.g. its per-app alarm limit): it won't ring.
+  static Future<bool> scheduleDose({
     required int doseId,
     required DateTime triggerAt,
     required String medName,
     required String dosage,
-  }) =>
-      _channel.invokeMethod('scheduleDose', {
+  }) async =>
+      await _channel.invokeMethod<bool>('scheduleDose', {
         'doseId': doseId,
         'triggerAt': triggerAt.millisecondsSinceEpoch,
         'medName': medName,
         'dosage': dosage,
-      });
+      }) ??
+      false;
 
   static Future<void> cancelDose(int doseId) =>
       _channel.invokeMethod('cancelDose', {'doseId': doseId});

@@ -35,16 +35,15 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "scheduleDose" -> {
+                    "scheduleDose" -> result.success(
                         AlarmScheduler.schedule(
                             context = this,
                             doseId = (call.argument<Number>("doseId")!!).toLong(),
                             triggerAtMillis = (call.argument<Number>("triggerAt")!!).toLong(),
                             medName = call.argument<String>("medName") ?: "Medication",
                             dosage = call.argument<String>("dosage") ?: "",
-                        )
-                        result.success(true)
-                    }
+                        ),
+                    )
 
                     "cancelDose" -> {
                         AlarmScheduler.cancel(this, (call.argument<Number>("doseId")!!).toLong())

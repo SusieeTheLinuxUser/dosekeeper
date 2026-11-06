@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import org.json.JSONObject
 
 /**
@@ -32,13 +33,14 @@ object AlarmScheduler {
         return PendingIntent.getBroadcast(context, doseId.toInt(), intent, flags)
     }
 
+    /** False if Android refused the alarm: it is not armed, and not recorded as armed. */
     fun schedule(
         context: Context,
         doseId: Long,
         triggerAtMillis: Long,
         medName: String,
         dosage: String,
-    ) {
+    ): Boolean {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         val fireIntent = Intent(context, AlarmReceiver::class.java).apply {
@@ -64,15 +66,24 @@ object AlarmScheduler {
         )
 
         try {
-            am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent), operation)
-        } catch (e: SecurityException) {
-            // "Alarms & reminders" is off (Android 12, where it can be turned off). Throwing here
-            // stopped the whole sync, so no dose got an alarm and the Today warning never showed.
-            // An inexact alarm needs no permission. It can ring late (in deep sleep, by an hour or more), but
-            // late beats silent. Android 12 may also refuse to start AlarmService for it: see notifyInstead.
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+            try {
+                am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent), operation)
+            } catch (e: SecurityException) {
+                // "Alarms & reminders" is off (Android 12, where it can be turned off). Throwing here
+                // stopped the whole sync, so no dose got an alarm and the Today warning never showed.
+                // An inexact alarm needs no permission. It can ring late (in deep sleep, by an hour or more), but
+                // late beats silent. Android 12 may also refuse to start AlarmService for it: see notifyInstead.
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+            }
+        } catch (e: RuntimeException) {
+            // E.g. IllegalStateException at Android's per-app alarm limit (~500). Thrown on, one
+            // refused alarm would stop every alarm after it: the rest of the sync (and Today stuck
+            // loading), or the rest of a reboot re-arm. So skip this one and tell the caller.
+            Log.e("DoseKeeper/Scheduler", "couldn't arm the alarm for dose $doseId", e)
+            return false
         }
         remember(context, doseId, triggerAtMillis, medName, dosage)
+        return true
     }
 
     fun cancel(context: Context, doseId: Long) {
