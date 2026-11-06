@@ -175,10 +175,13 @@ class DoseScheduler {
   Future<void> markSkipped(int doseId) =>
       _db.setDoseStatus(doseId, DoseStatus.skipped);
 
-  /// Cancels alarms for a medication's future doses (e.g. when it's deleted/paused).
+  /// Cancels alarms for a medication's pending doses (e.g. when it's deleted/paused).
+  /// Starts a day back: a snoozed dose keeps its passed time while its alarm is still
+  /// armed, so it would otherwise ring for a deleted or paused medication.
   Future<void> cancelFutureAlarmsFor(int medicationId, {DateTime? now}) async {
     final start = now ?? DateTime.now();
-    final upcoming = await _db.upcomingPendingDoses(start, start.add(horizon));
+    final upcoming = await _db.upcomingPendingDoses(
+        start.subtract(const Duration(days: 1)), start.add(horizon));
     for (final dose in upcoming.where((d) => d.medicationId == medicationId)) {
       if (dose.id != null) await AlarmBridge.cancelDose(dose.id!);
     }
