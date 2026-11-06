@@ -229,9 +229,22 @@ class AlarmService : Service() {
                 )
             }
             val n = buildNotification(context, doseId, medName, dosage, ringOnOpen = true, channel = FALLBACK_CHANNEL_ID)
+            n.extras.putLong(AlarmScheduler.EXTRA_DOSE_ID, doseId) // see cancelFallback
             n.flags = n.flags or Notification.FLAG_INSISTENT // repeat the sound until it's dealt with
             // Same id as the service's: when the alarm screen starts the ringing, that replaces this.
             nm.notify(NOTIFICATION_ID, n)
+        }
+
+        /** The dose was dealt with elsewhere (Today screen): stop its fallback notification ringing. */
+        fun cancelFallback(context: Context, doseId: Long) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            // One id for every dose, so check it's this dose's before clearing it.
+            if (nm.activeNotifications.any {
+                    it.id == NOTIFICATION_ID && it.notification.extras.getLong(AlarmScheduler.EXTRA_DOSE_ID, -1L) == doseId
+                }
+            ) {
+                nm.cancel(NOTIFICATION_ID)
+            }
         }
 
         fun stop(context: Context) {

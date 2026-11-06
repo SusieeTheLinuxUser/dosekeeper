@@ -80,6 +80,7 @@ object AlarmScheduler {
         broadcast(context, doseId, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
             ?.let { am.cancel(it); it.cancel() }
         forget(context, doseId)
+        AlarmService.cancelFallback(context, doseId)
     }
 
     // --- surviving a reboot ---
