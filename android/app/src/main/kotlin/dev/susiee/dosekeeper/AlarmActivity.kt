@@ -38,6 +38,9 @@ class AlarmActivity : Activity() {
                         putExtras(intent)
                     },
                 )
+            }.onFailure {
+                // The insistent notification keeps ringing until Taken/Snooze, so this isn't silent.
+                android.util.Log.e("DoseKeeper/Activity", "couldn't start ringing from the alarm screen", it)
             }
         }
 
