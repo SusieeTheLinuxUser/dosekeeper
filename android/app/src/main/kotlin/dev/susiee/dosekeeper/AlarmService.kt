@@ -38,7 +38,13 @@ class AlarmService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_RING -> startRinging(intent)
-            ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
+            ACTION_STOP -> {
+                val handled = intent.getLongArrayExtra(EXTRA_DOSE_IDS)
+                if (handled == null) ringing.clear() else handled.forEach { ringing.remove(it) }
+                if (ringing.isEmpty()) { stopSelf(); return START_NOT_STICKY }
+                // Another dose came due while the alarm screen was open: keep ringing for it.
+                startForeground(NOTIFICATION_ID, buildNotification(this, ringing.values.toList()))
+            }
         }
         // START_REDELIVER_INTENT: if the process is killed mid-ring, come back ringing.
         return START_REDELIVER_INTENT
@@ -51,14 +57,15 @@ class AlarmService : Service() {
 
         Log.i(TAG, "ringing dose=$doseId med=$medName")
 
-        // Two doses due at the same instant each call this once. Without releasing the
-        // previous ring's player/vibrator/wakelock first, the old MediaPlayer keeps
-        // looping forever, orphaned -- Taken/Snooze only ever stops the most recent one,
-        // so the sound becomes impossible to dismiss short of force-closing the app.
+        // Two doses due at the same instant each call this once. Both stay listed, so the
+        // alarm screen shows both: it used to show only the latest, and the other dose
+        // never got a screen of its own. Without releasing the previous ring's
+        // player/vibrator/wakelock first, the old MediaPlayer would keep looping, orphaned.
+        ringing[doseId] = Due(doseId, medName, dosage)
         releaseRingingResources()
         acquireWakeLock()
         createChannel(this)
-        startForeground(NOTIFICATION_ID, buildNotification(this, doseId, medName, dosage))
+        startForeground(NOTIFICATION_ID, buildNotification(this, ringing.values.toList()))
         playAlarmSound()
         startVibrating()
     }
@@ -123,6 +130,7 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        ringing.clear()
         releaseRingingResources()
         super.onDestroy()
     }
@@ -139,7 +147,17 @@ class AlarmService : Service() {
         wakeLock?.takeIf { it.isHeld }?.release()
     }
 
+    data class Due(val id: Long, val name: String, val dosage: String) {
+        val label get() = if (dosage.isBlank()) name else "$name - $dosage"
+    }
+
     companion object {
+        // ponytail: in memory. If Android kills the process mid-ring, START_REDELIVER_INTENT
+        // brings back only the latest dose; persist this if that ever matters.
+        private val ringing = LinkedHashMap<Long, Due>()
+        const val EXTRA_DOSE_IDS = "dose_ids"
+        const val EXTRA_MED_NAMES = "med_names"
+        const val EXTRA_DOSAGES = "dosages"
         private const val TAG = "DoseKeeper/Service"
         const val ACTION_RING = "dev.susiee.dosekeeper.RING"
         const val ACTION_STOP = "dev.susiee.dosekeeper.STOP"
@@ -168,26 +186,24 @@ class AlarmService : Service() {
 
         private fun buildNotification(
             context: Context,
-            doseId: Long,
-            medName: String,
-            dosage: String,
+            doses: List<Due>,
             ringOnOpen: Boolean = false,
             channel: String = CHANNEL_ID,
         ): Notification {
             val fullScreen = PendingIntent.getActivity(
                 context,
-                doseId.toInt(),
+                doses.last().id.toInt(),
                 Intent(context, AlarmActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    putExtra(AlarmScheduler.EXTRA_DOSE_ID, doseId)
-                    putExtra(AlarmScheduler.EXTRA_MED_NAME, medName)
-                    putExtra(AlarmScheduler.EXTRA_DOSAGE, dosage)
+                    putExtra(EXTRA_DOSE_IDS, doses.map { it.id }.toLongArray())
+                    putExtra(EXTRA_MED_NAMES, doses.map { it.name }.toTypedArray())
+                    putExtra(EXTRA_DOSAGES, doses.map { it.dosage }.toTypedArray())
                     putExtra(EXTRA_RING_ON_OPEN, ringOnOpen)
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-            val title = if (dosage.isBlank()) medName else "$medName - $dosage"
+            val title = doses.joinToString(", ") { it.label }
             return NotificationCompat.Builder(context, channel)
                 .setSmallIcon(android.R.drawable.ic_popup_reminder)
                 .setContentTitle("Time for $title")
@@ -228,7 +244,7 @@ class AlarmService : Service() {
                         },
                 )
             }
-            val n = buildNotification(context, doseId, medName, dosage, ringOnOpen = true, channel = FALLBACK_CHANNEL_ID)
+            val n = buildNotification(context, listOf(Due(doseId, medName, dosage)), ringOnOpen = true, channel = FALLBACK_CHANNEL_ID)
             n.extras.putLong(AlarmScheduler.EXTRA_DOSE_ID, doseId) // see cancelFallback
             n.flags = n.flags or Notification.FLAG_INSISTENT // repeat the sound until it's dealt with
             // Same id as the service's: when the alarm screen starts the ringing, that replaces this.
@@ -247,11 +263,13 @@ class AlarmService : Service() {
             }
         }
 
-        fun stop(context: Context) {
+        /** [doseIds]: the doses the alarm screen dealt with; one that came due since keeps ringing. */
+        fun stop(context: Context, doseIds: LongArray) {
             // Posted by notifyInstead when the service never started, so stopping it won't clear it.
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
             context.startService(Intent(context, AlarmService::class.java).apply {
                 action = ACTION_STOP
+                putExtra(EXTRA_DOSE_IDS, doseIds)
             })
         }
     }
