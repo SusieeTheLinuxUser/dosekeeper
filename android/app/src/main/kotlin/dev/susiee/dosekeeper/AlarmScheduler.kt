@@ -63,7 +63,14 @@ object AlarmScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent), operation)
+        try {
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent), operation)
+        } catch (e: SecurityException) {
+            // "Alarms & reminders" is off (Android 12, where it can be turned off). Throwing here
+            // stopped the whole sync, so no dose got an alarm and the Today warning never showed.
+            // An inexact alarm needs no permission: it may ring a few minutes late, never not at all.
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+        }
         remember(context, doseId, triggerAtMillis, medName, dosage)
     }
 
