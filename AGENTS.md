@@ -19,6 +19,11 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-06: doses due at the same moment now share one alarm screen that lists them all,
+and Taken/Snooze applies to each (before, only the latest dose got a screen). Tested on the
+emulator with two meds at the same minute. The Android 12 fallback from PR #24 is still
+untested on a device.
+
 v1.1.7 was merged to `master` (PR #22) but has no `v1.1.7` tag or stable release yet: the
 user may release it later. `1.1.7-debug` is on the phone, with the Google backup switch off.
 
