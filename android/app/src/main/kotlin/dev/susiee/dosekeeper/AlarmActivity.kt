@@ -17,15 +17,18 @@ import android.widget.Toast
  */
 class AlarmActivity : Activity() {
 
-    private var doseId: Long = -1L
+    private var doses: List<AlarmService.Due> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockscreen()
 
-        doseId = intent.getLongExtra(AlarmScheduler.EXTRA_DOSE_ID, -1L)
-        val medName = intent.getStringExtra(AlarmScheduler.EXTRA_MED_NAME) ?: "Medication"
-        val dosage = intent.getStringExtra(AlarmScheduler.EXTRA_DOSAGE) ?: ""
+        val ids = intent.getLongArrayExtra(AlarmService.EXTRA_DOSE_IDS) ?: LongArray(0)
+        val names = intent.getStringArrayExtra(AlarmService.EXTRA_MED_NAMES)
+        val dosages = intent.getStringArrayExtra(AlarmService.EXTRA_DOSAGES)
+        doses = ids.mapIndexed { i, id ->
+            AlarmService.Due(id, names?.getOrNull(i) ?: "Medication", dosages?.getOrNull(i) ?: "")
+        }
 
         setContentView(R.layout.activity_alarm)
 
@@ -36,7 +39,11 @@ class AlarmActivity : Activity() {
                     this,
                     Intent(this, AlarmService::class.java).apply {
                         action = AlarmService.ACTION_RING
-                        putExtras(intent)
+                        doses.firstOrNull()?.let { // the fallback is always one dose
+                            putExtra(AlarmScheduler.EXTRA_DOSE_ID, it.id)
+                            putExtra(AlarmScheduler.EXTRA_MED_NAME, it.name)
+                            putExtra(AlarmScheduler.EXTRA_DOSAGE, it.dosage)
+                        }
                     },
                 )
             }.onFailure {
@@ -45,10 +52,18 @@ class AlarmActivity : Activity() {
             }
         }
 
-        findViewById<android.widget.TextView>(R.id.alarm_med_name).text = medName
+        val one = doses.singleOrNull()
+        findViewById<android.widget.TextView>(R.id.alarm_med_name).apply {
+            if (one != null) {
+                text = one.name
+            } else { // several due at once: one line each, smaller so they fit
+                text = doses.joinToString("\n") { it.label }
+                textSize = 26f
+            }
+        }
         findViewById<android.widget.TextView>(R.id.alarm_dosage).apply {
-            text = dosage
-            visibility = if (dosage.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
+            text = one?.dosage.orEmpty()
+            visibility = if (text.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
         }
 
         findViewById<android.widget.Button>(R.id.alarm_taken).setOnClickListener {
@@ -82,31 +97,29 @@ class AlarmActivity : Activity() {
      * Flutter engine may not be running at all when the alarm fires.
      */
     private fun finishWith(action: PendingAction) {
+        val now = System.currentTimeMillis()
         if (action == PendingAction.SNOOZE) {
-            val medName = intent.getStringExtra(AlarmScheduler.EXTRA_MED_NAME) ?: "Medication"
-            val dosage = intent.getStringExtra(AlarmScheduler.EXTRA_DOSAGE) ?: ""
-            val snoozed = AlarmScheduler.schedule(
-                this,
-                doseId,
-                System.currentTimeMillis() + SNOOZE_MS,
-                medName,
-                dosage,
-            )
-            // Android refused the snooze alarm. Stopping now would mean this dose never
-            // rings again, so keep ringing and say so.
-            if (!snoozed) {
+            val refused = doses.count {
+                !AlarmScheduler.schedule(this, it.id, now + SNOOZE_MS, it.name, it.dosage)
+            }
+            // Android refused a snooze alarm. Stopping now would mean that dose never rings
+            // again, so keep ringing and say so.
+            // ponytail: the snoozes that did arm stay armed; Taken next would still ring
+            // them once in 10 min. Roll them back if partial refusals ever show up.
+            if (refused > 0) {
                 Toast.makeText(this, "Couldn't snooze. Take it now, or try again.", Toast.LENGTH_LONG).show()
                 return
             }
         }
 
-        getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString("pending_action_$doseId", action.name)
-            .putLong("pending_action_at_$doseId", System.currentTimeMillis())
-            .apply()
+        val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE).edit()
+        for (dose in doses) {
+            prefs.putString("pending_action_${dose.id}", action.name)
+                .putLong("pending_action_at_${dose.id}", now)
+        }
+        prefs.apply()
 
-        AlarmService.stop(this)
+        AlarmService.stop(this, doses.map { it.id }.toLongArray())
         finish()
     }
 
