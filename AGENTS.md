@@ -302,6 +302,15 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   currently listed. Historical (already taken/skipped) doses are left alone on purpose --
   they're an honest record of what happened, orphan or not.
 
+- **A refused alarm can't stop the others** (2026-11-06, from a CodeRabbit note on PR #24).
+  `AlarmScheduler.schedule` catches any `RuntimeException` (e.g. `IllegalStateException` at
+  Android's ~500 per-app alarm limit), logs it, skips the registry and returns `false`.
+  Before, one throw became a `PlatformException` that stopped `sync()` (later doses unarmed,
+  Today stuck loading) and stopped a reboot re-arm part way. `DoseScheduler.unarmedAlarms`
+  counts refusals per sync and Today shows "Android refused N alarms" with a Retry, since a
+  refused alarm never rings. A refused snooze keeps the alarm ringing, with a toast, and undoes any snoozes that did arm (`AlarmScheduler.disarm`). Not reproduced on a device:
+  hard to force a refusal.
+
 - **Low-battery warning** (`MainActivity` `isBatteryLow`/`openBatterySettings`,
   `AlarmBridge.isBatteryLow`, `TodayPageState._batteryLevelOk`) — fourth Today-screen
   self-diagnosis card: shows when battery is <= 20% (`LOW_BATTERY_PERCENT`) **and**

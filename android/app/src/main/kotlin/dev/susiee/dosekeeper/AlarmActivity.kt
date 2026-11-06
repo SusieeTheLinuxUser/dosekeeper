@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 
 /**
  * The ringing alarm screen. Appears over the lockscreen with the screen turned on.
@@ -97,18 +98,26 @@ class AlarmActivity : Activity() {
      */
     private fun finishWith(action: PendingAction) {
         val now = System.currentTimeMillis()
+        if (action == PendingAction.SNOOZE) {
+            val snoozed = doses.filter {
+                AlarmScheduler.schedule(this, it.id, now + SNOOZE_MS, it.name, it.dosage)
+            }
+            // Android refused a snooze alarm. Stopping now would mean that dose never rings
+            // again, so keep ringing and say so. Undo the snoozes that did arm: tapping Taken
+            // next would otherwise ring them again in 10 minutes.
+            if (snoozed.size < doses.size) {
+                snoozed.forEach { AlarmScheduler.disarm(this, it.id) }
+                Toast.makeText(this, "Couldn't snooze. Take it now, or try again.", Toast.LENGTH_LONG).show()
+                return
+            }
+        }
+
         val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE).edit()
         for (dose in doses) {
             prefs.putString("pending_action_${dose.id}", action.name)
                 .putLong("pending_action_at_${dose.id}", now)
         }
         prefs.apply()
-
-        if (action == PendingAction.SNOOZE) {
-            for (dose in doses) {
-                AlarmScheduler.schedule(this, dose.id, now + SNOOZE_MS, dose.name, dose.dosage)
-            }
-        }
 
         AlarmService.stop(this, doses.map { it.id }.toLongArray())
         finish()

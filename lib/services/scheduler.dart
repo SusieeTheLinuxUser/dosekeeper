@@ -20,6 +20,10 @@ class DoseScheduler {
   static DateTime slot(DateTime day, int minutes) =>
       DateTime(day.year, day.month, day.day, 0, minutes);
 
+  /// Upcoming doses whose alarm Android refused on the last [sync]. They won't ring,
+  /// so the Today screen says so. The next sync tries them again.
+  int unarmedAlarms = 0;
+
   /// Regenerates upcoming doses and re-arms alarms. Safe to call repeatedly --
   /// dose creation is idempotent on (medication, scheduled_at).
   Future<void> sync({DateTime? now}) async {
@@ -126,16 +130,19 @@ class DoseScheduler {
   Future<void> _armAlarms(List<Medication> meds, DateTime now) async {
     final byId = {for (final m in meds) m.id: m};
     final upcoming = await _db.upcomingPendingDoses(now, now.add(horizon));
+    var failed = 0;
     for (final dose in upcoming) {
       final med = byId[dose.medicationId];
       if (med == null || dose.id == null) continue;
-      await AlarmBridge.scheduleDose(
+      final armed = await AlarmBridge.scheduleDose(
         doseId: dose.id!,
         triggerAt: dose.scheduledAt,
         medName: med.name,
         dosage: med.dosage,
       );
+      if (!armed) failed++;
     }
+    unarmedAlarms = failed;
   }
 
   /// Applies outcomes the native alarm screen recorded while Dart wasn't running.

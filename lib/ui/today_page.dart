@@ -22,6 +22,7 @@ class TodayPageState extends State<TodayPage> {
   List<({Dose dose, Medication med})> _items = [];
   bool _loading = true;
   bool _exactOk = true;
+  int _unarmed = 0;
   bool _batteryOk = true;
   bool _notificationsOk = true;
   // Battery *level*, distinct from _batteryOk (the optimisation whitelist).
@@ -65,6 +66,7 @@ class TodayPageState extends State<TodayPage> {
             (dose: d, med: meds[d.medicationId]!),
       ];
       _exactOk = exact;
+      _unarmed = widget.scheduler.unarmedAlarms;
       _batteryOk = battery;
       _notificationsOk = notifications;
       _batteryLevelOk = !batteryLow;
@@ -108,6 +110,16 @@ class TodayPageState extends State<TodayPage> {
             await Future<void>.delayed(const Duration(seconds: 1));
             await refresh();
           },
+        ),
+      // A refused alarm never rings, and nothing else would say so until the dose is
+      // already missed.
+      if (_unarmed > 0)
+        _Warning(
+          text: _unarmed == 1
+              ? 'Android refused 1 alarm. That dose won\'t ring.'
+              : 'Android refused $_unarmed alarms. Those doses won\'t ring.',
+          actionLabel: 'Retry',
+          onAction: refresh,
         ),
       if (!_exactOk)
         _Warning(
