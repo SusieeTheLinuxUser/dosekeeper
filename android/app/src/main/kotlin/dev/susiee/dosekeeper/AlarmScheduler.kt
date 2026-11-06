@@ -63,7 +63,15 @@ object AlarmScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent), operation)
+        try {
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent), operation)
+        } catch (e: SecurityException) {
+            // "Alarms & reminders" is off (Android 12, where it can be turned off). Throwing here
+            // stopped the whole sync, so no dose got an alarm and the Today warning never showed.
+            // An inexact alarm needs no permission. It can ring late (in deep sleep, by an hour or more), but
+            // late beats silent. Android 12 may also refuse to start AlarmService for it: see notifyInstead.
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+        }
         remember(context, doseId, triggerAtMillis, medName, dosage)
     }
 
@@ -72,6 +80,7 @@ object AlarmScheduler {
         broadcast(context, doseId, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
             ?.let { am.cancel(it); it.cancel() }
         forget(context, doseId)
+        AlarmService.cancelFallback(context, doseId)
     }
 
     // --- surviving a reboot ---

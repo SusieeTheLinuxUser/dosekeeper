@@ -1,5 +1,6 @@
 package dev.susiee.dosekeeper
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -56,8 +57,8 @@ class AlarmService : Service() {
         // so the sound becomes impossible to dismiss short of force-closing the app.
         releaseRingingResources()
         acquireWakeLock()
-        createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification(doseId, medName, dosage))
+        createChannel(this)
+        startForeground(NOTIFICATION_ID, buildNotification(this, doseId, medName, dosage))
         playAlarmSound()
         startVibrating()
     }
@@ -69,51 +70,6 @@ class AlarmService : Service() {
             PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
             "DoseKeeper::AlarmWakeLock",
         ).apply { acquire(RING_TIMEOUT_MS) }
-    }
-
-    private fun createChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Medication alarms",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "Rings when a dose is due. Do not disable."
-            setSound(null, null) // the service plays the sound itself, on the alarm stream
-            enableVibration(false)
-            setBypassDnd(true)
-            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-        }
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .createNotificationChannel(channel)
-    }
-
-    private fun buildNotification(doseId: Long, medName: String, dosage: String): android.app.Notification {
-        val fullScreen = PendingIntent.getActivity(
-            this,
-            doseId.toInt(),
-            Intent(this, AlarmActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra(AlarmScheduler.EXTRA_DOSE_ID, doseId)
-                putExtra(AlarmScheduler.EXTRA_MED_NAME, medName)
-                putExtra(AlarmScheduler.EXTRA_DOSAGE, dosage)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val title = if (dosage.isBlank()) medName else "$medName - $dosage"
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("Time for $title")
-            .setContentText("Tap to mark it taken")
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setOngoing(true)
-            .setAutoCancel(false)
-            .setFullScreenIntent(fullScreen, true)
-            .setContentIntent(fullScreen)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
     }
 
     private fun playAlarmSound() {
@@ -188,10 +144,112 @@ class AlarmService : Service() {
         const val ACTION_RING = "dev.susiee.dosekeeper.RING"
         const val ACTION_STOP = "dev.susiee.dosekeeper.STOP"
         const val CHANNEL_ID = "dose_alarms"
+        private const val FALLBACK_CHANNEL_ID = "dose_alarms_fallback"
         const val NOTIFICATION_ID = 4242
         private const val RING_TIMEOUT_MS = 5 * 60 * 1000L
+        const val EXTRA_RING_ON_OPEN = "ring_on_open"
+
+        private fun createChannel(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Medication alarms",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Rings when a dose is due. Do not disable."
+                setSound(null, null) // the service plays the sound itself, on the alarm stream
+                enableVibration(false)
+                setBypassDnd(true)
+                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+            }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(channel)
+        }
+
+        private fun buildNotification(
+            context: Context,
+            doseId: Long,
+            medName: String,
+            dosage: String,
+            ringOnOpen: Boolean = false,
+            channel: String = CHANNEL_ID,
+        ): Notification {
+            val fullScreen = PendingIntent.getActivity(
+                context,
+                doseId.toInt(),
+                Intent(context, AlarmActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    putExtra(AlarmScheduler.EXTRA_DOSE_ID, doseId)
+                    putExtra(AlarmScheduler.EXTRA_MED_NAME, medName)
+                    putExtra(AlarmScheduler.EXTRA_DOSAGE, dosage)
+                    putExtra(EXTRA_RING_ON_OPEN, ringOnOpen)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+
+            val title = if (dosage.isBlank()) medName else "$medName - $dosage"
+            return NotificationCompat.Builder(context, channel)
+                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setContentTitle("Time for $title")
+                .setContentText("Tap to mark it taken")
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setFullScreenIntent(fullScreen, true)
+                .setContentIntent(fullScreen)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
+        }
+
+        /**
+         * For when Android won't start this service: on Android 12 the inexact fallback alarm
+         * (no "Alarms & reminders" access) gives no right to start one from the background.
+         * Shows the alarm screen instead, which starts the ringing once it's open (allowed then).
+         * Until then (unlocked phone: only a heads-up), the notification itself rings, on repeat.
+         */
+        fun notifyInstead(context: Context, doseId: Long, medName: String, dosage: String) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { // only Android 12 reaches here
+                nm.createNotificationChannel(
+                    NotificationChannel(FALLBACK_CHANNEL_ID, "Medication alarms (backup)", NotificationManager.IMPORTANCE_HIGH)
+                        .apply {
+                            description = "Rings when a dose is due and the normal alarm can't start. Do not disable."
+                            setSound(
+                                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                                AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_ALARM)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                    .build(),
+                            )
+                            enableVibration(true)
+                            setBypassDnd(true)
+                            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                        },
+                )
+            }
+            val n = buildNotification(context, doseId, medName, dosage, ringOnOpen = true, channel = FALLBACK_CHANNEL_ID)
+            n.extras.putLong(AlarmScheduler.EXTRA_DOSE_ID, doseId) // see cancelFallback
+            n.flags = n.flags or Notification.FLAG_INSISTENT // repeat the sound until it's dealt with
+            // Same id as the service's: when the alarm screen starts the ringing, that replaces this.
+            nm.notify(NOTIFICATION_ID, n)
+        }
+
+        /** The dose was dealt with elsewhere (Today screen): stop its fallback notification ringing. */
+        fun cancelFallback(context: Context, doseId: Long) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            // One id for every dose, so check it's this dose's before clearing it.
+            if (nm.activeNotifications.any {
+                    it.id == NOTIFICATION_ID && it.notification.extras.getLong(AlarmScheduler.EXTRA_DOSE_ID, -1L) == doseId
+                }
+            ) {
+                nm.cancel(NOTIFICATION_ID)
+            }
+        }
 
         fun stop(context: Context) {
+            // Posted by notifyInstead when the service never started, so stopping it won't clear it.
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
             context.startService(Intent(context, AlarmService::class.java).apply {
                 action = ACTION_STOP
             })

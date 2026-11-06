@@ -28,6 +28,22 @@ class AlarmActivity : Activity() {
 
         setContentView(R.layout.activity_alarm)
 
+        // Opened from AlarmService.notifyInstead: nothing is ringing yet. On screen, the app may start it.
+        if (savedInstanceState == null && intent.getBooleanExtra(AlarmService.EXTRA_RING_ON_OPEN, false)) {
+            runCatching {
+                androidx.core.content.ContextCompat.startForegroundService(
+                    this,
+                    Intent(this, AlarmService::class.java).apply {
+                        action = AlarmService.ACTION_RING
+                        putExtras(intent)
+                    },
+                )
+            }.onFailure {
+                // The insistent notification keeps ringing until Taken/Snooze, so this isn't silent.
+                android.util.Log.e("DoseKeeper/Activity", "couldn't start ringing from the alarm screen", it)
+            }
+        }
+
         findViewById<android.widget.TextView>(R.id.alarm_med_name).text = medName
         findViewById<android.widget.TextView>(R.id.alarm_dosage).apply {
             text = dosage

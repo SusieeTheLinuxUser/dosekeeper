@@ -33,10 +33,20 @@ class AlarmReceiver : BroadcastReceiver() {
             action = AlarmService.ACTION_RING
             putExtras(intent)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
+        } catch (e: IllegalStateException) { // ForegroundServiceStartNotAllowedException
+            Log.w(TAG, "can't start the ringing service from the background", e)
+            AlarmService.notifyInstead(
+                context,
+                doseId,
+                intent.getStringExtra(AlarmScheduler.EXTRA_MED_NAME) ?: "Medication",
+                intent.getStringExtra(AlarmScheduler.EXTRA_DOSAGE) ?: "",
+            )
         }
     }
 
