@@ -23,8 +23,12 @@ import java.io.FileNotFoundException
 object BackupStore {
     private const val PREFS = "dosekeeper_backup"
     private const val KEY_TREE_URI = "tree_uri"
+    private const val KEY_PENDING_TREE_URI = "pending_tree_uri"
     private const val KEY_LAST_BACKUP_AT = "last_backup_at"
     private const val MIME_JSON = "application/json"
+
+    private const val GRANT_FLAGS =
+        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -43,24 +47,61 @@ object BackupStore {
         if (enabled) marker.createNewFile() else marker.delete()
     }
 
-    /** Takes a lasting grant on [tree] (survives reboots) and makes it the backup folder. */
-    fun setFolder(context: Context, tree: Uri) {
-        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        context.contentResolver.takePersistableUriPermission(tree, flags)
-        // Let go of the previous folder's grant: Android caps how many an app may hold.
-        folderUri(context)?.takeIf { it != tree }?.let {
-            runCatching { context.contentResolver.releasePersistableUriPermission(it, flags) }
+    /**
+     * Takes a lasting grant on [tree] (survives reboots) and keeps it as the *pending*
+     * folder: not the backup folder until [confirmPendingFolder]. Two-phase because the
+     * picker answers before Dart has asked "restore or keep" -- if answering made the
+     * folder active right away, leaving the dialog unanswered (app killed, page closed)
+     * would point automatic backups at a folder the user never confirmed.
+     * A pending folder left over from a killed app is discarded on the next pick.
+     */
+    fun setPendingFolder(context: Context, tree: Uri): Map<String, Any?> {
+        // Grant first: if the tree is the same as a leftover pending, the discard must
+        // not release the grant we are about to rely on.
+        context.contentResolver.takePersistableUriPermission(tree, GRANT_FLAGS)
+        val leftover = prefs(context).getString(KEY_PENDING_TREE_URI, null)
+        prefs(context).edit().putString(KEY_PENDING_TREE_URI, tree.toString()).apply()
+        if (leftover != null && leftover != tree.toString()) {
+            releaseGrant(context, Uri.parse(leftover))
         }
-        prefs(context).edit().putString(KEY_TREE_URI, tree.toString()).apply()
+        return mapOf("folderName" to folderName(context, tree))
+    }
+
+    /** Makes the pending folder the backup folder. No-op without one. */
+    fun confirmPendingFolder(context: Context) {
+        val pending = prefs(context).getString(KEY_PENDING_TREE_URI, null) ?: return
+        // Let go of the previous folder's grant: Android caps how many an app may hold.
+        val previous = prefs(context).getString(KEY_TREE_URI, null)
+        prefs(context).edit()
+            .putString(KEY_TREE_URI, pending)
+            .remove(KEY_PENDING_TREE_URI)
+            .apply()
+        if (previous != null && previous != pending) {
+            releaseGrant(context, Uri.parse(previous))
+        }
+    }
+
+    /** Drops the pending folder without making it active. */
+    fun discardPendingFolder(context: Context) {
+        val pending = prefs(context).getString(KEY_PENDING_TREE_URI, null) ?: return
+        prefs(context).edit().remove(KEY_PENDING_TREE_URI).apply()
+        releaseGrant(context, Uri.parse(pending))
+    }
+
+    /** Never releases the active folder's grant: pending may point at the same folder. */
+    private fun releaseGrant(context: Context, uri: Uri) {
+        if (uri.toString() == prefs(context).getString(KEY_TREE_URI, null)) return
+        runCatching { context.contentResolver.releasePersistableUriPermission(uri, GRANT_FLAGS) }
     }
 
     /**
-     * The backup folder, or null if none was chosen or the grant is gone (revoked in
-     * settings, or the folder was deleted) -- the caller must treat that as "backups
-     * are off", not as silently succeeding.
+     * The backup folder (or the pending one with [pending]), or null if none was chosen
+     * or the grant is gone (revoked in settings, or the folder was deleted) -- the caller
+     * must treat that as "backups are off", not as silently succeeding.
      */
-    fun folderUri(context: Context): Uri? {
-        val stored = prefs(context).getString(KEY_TREE_URI, null) ?: return null
+    fun folderUri(context: Context, pending: Boolean = false): Uri? {
+        val key = if (pending) KEY_PENDING_TREE_URI else KEY_TREE_URI
+        val stored = prefs(context).getString(key, null) ?: return null
         val uri = Uri.parse(stored)
         val granted = context.contentResolver.persistedUriPermissions.any {
             it.uri == uri && it.isWritePermission && it.isReadPermission
@@ -88,8 +129,10 @@ object BackupStore {
         return name ?: tree.lastPathSegment ?: "Backup folder"
     }
 
-    private fun requireFolder(context: Context): Uri =
-        folderUri(context) ?: throw FileNotFoundException("No backup folder chosen")
+    private fun requireFolder(context: Context, pending: Boolean = false): Uri =
+        folderUri(context, pending) ?: throw FileNotFoundException(
+            if (pending) "No picked folder waiting to be confirmed" else "No backup folder chosen",
+        )
 
     /** (documentId, displayName) of every file directly inside the folder. */
     private fun children(context: Context, tree: Uri): List<Pair<String, String>> {
@@ -116,11 +159,11 @@ object BackupStore {
         children(context, tree).firstOrNull { it.second == name }
             ?.let { DocumentsContract.buildDocumentUriUsingTree(tree, it.first) }
 
-    fun list(context: Context): List<String> =
-        children(context, requireFolder(context)).map { it.second }
+    fun list(context: Context, pending: Boolean = false): List<String> =
+        children(context, requireFolder(context, pending)).map { it.second }
 
-    fun read(context: Context, name: String): String {
-        val tree = requireFolder(context)
+    fun read(context: Context, name: String, pending: Boolean = false): String {
+        val tree = requireFolder(context, pending)
         val doc = find(context, tree, name) ?: throw FileNotFoundException(name)
         return readUri(context, doc)
     }

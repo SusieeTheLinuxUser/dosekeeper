@@ -27,12 +27,6 @@ class BackupService {
   /// none, for the same reason an alarm that quietly doesn't ring is.
   String? lastError;
 
-  /// Folder choices in progress. While any is open, its resume must not write today's
-  /// file before the backup page has asked whether to restore what is already there.
-  /// A count, not a flag: a second choice started while the first one is still
-  /// waiting must keep the hold when the first one ends.
-  int holds = 0;
-
   Future<Backup> snapshot({DateTime? now}) async => Backup(
         exportedAt: now ?? DateTime.now(),
         medications: await _db.medications(includeDeleted: true),
@@ -54,9 +48,6 @@ class BackupService {
   }
 
   Future<void> _running = Future.value();
-
-  /// Completes once every backup already queued has finished.
-  Future<void> get backupsIdle => _running;
 
   Future<BackupFolderStatus> _backUp({DateTime? now}) async {
     final status = await BackupBridge.status();
@@ -90,7 +81,6 @@ class BackupService {
   /// refresh.
   Future<BackupFolderStatus?> backUpQuietly() async {
     try {
-      if (holds > 0) return await BackupBridge.status();
       return await backUp();
     } on PlatformException catch (e) {
       lastError = e.message ?? e.code;

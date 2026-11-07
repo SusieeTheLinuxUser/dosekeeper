@@ -62,32 +62,43 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _chooseFolder() => _run(() async {
-        _service.holds++;
+        // The picked folder stays *pending* until an explicit confirm, so any exit
+        // without an answer (backed out, page closed, error -- the pick itself
+        // included) leaves the old folder active and automatic backups untouched.
+        // The finally discards it.
+        var confirmed = false;
         try {
-          // A backup queued just before the hold must not land in the new folder.
-          await _service.backupsIdle;
-          if (!mounted) return; // left the page while waiting
-          final picked = await BackupBridge.pickFolder();
-          if (picked == null) return; // backed out
-
+          final name = await BackupBridge.pickFolder();
+          if (name == null) return; // backed out of the picker
           // Picking a folder that already holds backups is what someone does after a
-          // reinstall. Offer the restore *before* the first automatic backup can
-          // overwrite today's file with whatever is on the phone now.
-          final existing = Backup.newestFirst(await BackupBridge.list());
+          // reinstall. Offer the restore *before* the first backup can overwrite
+          // today's file with whatever is on the phone now.
+          final existing =
+              Backup.newestFirst(await BackupBridge.list(pending: true));
           // Asked until answered: cancelling the restore's own confirmation comes back
           // here instead of counting as "keep".
           while (existing.isNotEmpty) {
             if (!mounted) return; // nobody to ask: don't write over what is there
             final restore = await _askRestoreFromFolder(existing.first);
             if (restore != true) break; // keep this phone's data
-            if (await _restore(Backup.decode(await BackupBridge.read(existing.first)))) {
-              return;
-            }
+            final backup =
+                Backup.decode(await BackupBridge.read(existing.first, pending: true));
+            // Confirmed once the data is replaced but before the restore's own backup:
+            // that backup lands in this folder, the old folder's file for today keeps
+            // the pre-restore data, and a failed restore leaves this folder unconfirmed
+            // so no automatic backup can overwrite the file being restored.
+            final restored = await _restore(backup, onReplaced: () async {
+              await BackupBridge.confirmFolder();
+              confirmed = true;
+            });
+            if (restored) return;
           }
+          await BackupBridge.confirmFolder();
+          confirmed = true;
           await _service.backUp();
-          _toast('Backups will be saved to ${picked.folderName}');
+          _toast('Backups will be saved to $name');
         } finally {
-          _service.holds--;
+          if (!confirmed) await BackupBridge.discardFolder();
         }
       });
 
@@ -138,7 +149,7 @@ class _BackupPageState extends State<BackupPage> {
 
   /// Confirms, then replaces everything. Always confirmed: a restore overwrites every
   /// medication and all history currently on the phone. True once restored.
-  Future<bool> _restore(Backup backup) async {
+  Future<bool> _restore(Backup backup, {Future<void> Function()? onReplaced}) async {
     final taken = backup.doses.where((d) => d.status == DoseStatus.taken).length;
     if (!mounted) return false;
     final confirmed = await showDialog<bool>(
@@ -166,6 +177,7 @@ class _BackupPageState extends State<BackupPage> {
     if (confirmed != true) return false;
 
     await widget.scheduler.restore(backup);
+    await onReplaced?.call();
     await _service.backUpQuietly();
     _toast('Restored ${backup.medications.length} medication(s). Alarms re-armed.');
     return true;
