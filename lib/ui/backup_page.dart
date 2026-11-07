@@ -74,10 +74,13 @@ class _BackupPageState extends State<BackupPage> {
           // reinstall. Offer the restore *before* the first automatic backup can
           // overwrite today's file with whatever is on the phone now.
           final existing = Backup.newestFirst(await BackupBridge.list());
-          if (existing.isNotEmpty && mounted) {
+          // Asked until answered: cancelling the restore's own confirmation comes back
+          // here instead of counting as "keep".
+          while (existing.isNotEmpty) {
+            if (!mounted) return; // nobody to ask: don't write over what is there
             final restore = await _askRestoreFromFolder(existing.first);
-            if (restore == true) {
-              await _restore(Backup.decode(await BackupBridge.read(existing.first)));
+            if (restore != true) break; // keep this phone's data
+            if (await _restore(Backup.decode(await BackupBridge.read(existing.first)))) {
               return;
             }
           }
@@ -134,10 +137,10 @@ class _BackupPageState extends State<BackupPage> {
       });
 
   /// Confirms, then replaces everything. Always confirmed: a restore overwrites every
-  /// medication and all history currently on the phone.
-  Future<void> _restore(Backup backup) async {
+  /// medication and all history currently on the phone. True once restored.
+  Future<bool> _restore(Backup backup) async {
     final taken = backup.doses.where((d) => d.status == DoseStatus.taken).length;
-    if (!mounted) return;
+    if (!mounted) return false;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -160,11 +163,12 @@ class _BackupPageState extends State<BackupPage> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) return false;
 
     await widget.scheduler.restore(backup);
     await _service.backUpQuietly();
     _toast('Restored ${backup.medications.length} medication(s). Alarms re-armed.');
+    return true;
   }
 
   @override
