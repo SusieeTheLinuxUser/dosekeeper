@@ -131,10 +131,13 @@ class MainActivity : FlutterActivity() {
 
                     "openFullScreenIntentSettings" -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                            startActivity(
-                                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-                                    .setData(Uri.parse("package:$packageName")),
-                            )
+                            val pkg = Uri.parse("package:$packageName")
+                            try {
+                                startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).setData(pkg))
+                            } catch (e: ActivityNotFoundException) {
+                                // OEM builds may drop that screen; the app's own page still has the switch.
+                                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(pkg))
+                            }
                         }
                         result.success(true)
                     }
