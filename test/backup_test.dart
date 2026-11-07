@@ -194,6 +194,7 @@ void main() {
           'holiday.jpg',
           'dosekeeper-backup-2026-09-24.json',
           'dosekeeper-backup-2026-09-24 (1).json',
+          'dosekeeper-backup-2026-09-24.tmp.json',
           'dosekeeper-backup-2026-09-23.json',
         ]),
         [
