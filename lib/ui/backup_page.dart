@@ -62,26 +62,34 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _chooseFolder() => _run(() async {
-        final picked = await BackupBridge.pickFolder();
-        if (picked == null) return; // backed out
+        _service.holdAutomatic = true;
+        try {
+          final picked = await BackupBridge.pickFolder();
+          if (picked == null) return; // backed out
 
-        // Picking a folder that already holds backups is what someone does after a
-        // reinstall. Offer the restore *before* the first automatic backup can
-        // overwrite today's file with whatever is on the phone now.
-        final existing = Backup.newestFirst(await BackupBridge.list());
-        if (existing.isNotEmpty && mounted) {
-          final restore = await _askRestoreFromFolder(existing.first);
-          if (restore == true) {
-            await _restore(Backup.decode(await BackupBridge.read(existing.first)));
-            return;
+          // Picking a folder that already holds backups is what someone does after a
+          // reinstall. Offer the restore *before* the first automatic backup can
+          // overwrite today's file with whatever is on the phone now.
+          final existing = Backup.newestFirst(await BackupBridge.list());
+          if (existing.isNotEmpty && mounted) {
+            final restore = await _askRestoreFromFolder(existing.first);
+            if (restore == true) {
+              await _restore(Backup.decode(await BackupBridge.read(existing.first)));
+              return;
+            }
           }
+          await _service.backUp();
+          _toast('Backups will be saved to ${picked.folderName}');
+        } finally {
+          _service.holdAutomatic = false;
         }
-        await _service.backUp();
-        _toast('Backups will be saved to ${picked.folderName}');
       });
 
   Future<bool?> _askRestoreFromFolder(String newest) => showDialog<bool>(
         context: context,
+        // Dismissing must not fall through to the overwrite branch: one of the two
+        // buttons has to be the answer.
+        barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           title: const Text('This folder has backups'),
           content: Text(

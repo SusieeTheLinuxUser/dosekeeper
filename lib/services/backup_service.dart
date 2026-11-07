@@ -27,6 +27,10 @@ class BackupService {
   /// none, for the same reason an alarm that quietly doesn't ring is.
   String? lastError;
 
+  /// Set while the folder picker is open: its resume must not write today's file
+  /// before the backup page has asked whether to restore what is already there.
+  bool holdAutomatic = false;
+
   Future<Backup> snapshot({DateTime? now}) async => Backup(
         exportedAt: now ?? DateTime.now(),
         medications: await _db.medications(),
@@ -81,6 +85,7 @@ class BackupService {
   /// refresh.
   Future<BackupFolderStatus?> backUpQuietly() async {
     try {
+      if (holdAutomatic) return await BackupBridge.status();
       return await backUp();
     } on PlatformException catch (e) {
       lastError = e.message ?? e.code;
