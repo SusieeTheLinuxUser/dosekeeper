@@ -205,17 +205,19 @@ object BackupStore {
             DocumentsContract.getTreeDocumentId(tree),
         )
 
-        // A leftover temp means a previous write died. If today's file survived, the
-        // temp is junk; if not, the temp is the only copy -- unless the death came
-        // mid-write on the day's first backup, so install it only if it parses.
+        // A leftover temp means a previous write died. It replaces today's file only
+        // when it is complete (parses) and today's file is missing or partial (a
+        // death mid-copy in install); otherwise it is junk.
         find(context, tree, tmpName)?.let { leftover ->
-            val complete = find(context, tree, name) == null &&
-                runCatching { org.json.JSONObject(readUri(context, leftover)) }.isSuccess
-            if (!complete) {
+            val dest = find(context, tree, name)
+            if (!parses(context, leftover) || (dest != null && parses(context, dest))) {
                 deleteOrThrow(context, leftover, tmpName)
-            } else if (!install(context, parent, leftover, name)) {
-                // Keep the temp: it is the only complete copy of that backup.
-                throw FileNotFoundException("An interrupted backup of $name could not be recovered")
+            } else {
+                dest?.let { deleteOrThrow(context, it, name) }
+                if (!install(context, parent, leftover, name)) {
+                    // Keep the temp: it is the only complete copy of that backup.
+                    throw FileNotFoundException("An interrupted backup of $name could not be recovered")
+                }
             }
         }
 
@@ -260,6 +262,9 @@ object BackupStore {
         runCatching { DocumentsContract.deleteDocument(context.contentResolver, tmp) }
         return true
     }
+
+    private fun parses(context: Context, uri: Uri) =
+        runCatching { org.json.JSONObject(readUri(context, uri)) }.isSuccess
 
     private fun deleteOrThrow(context: Context, uri: Uri, name: String) {
         if (!DocumentsContract.deleteDocument(context.contentResolver, uri)) {
