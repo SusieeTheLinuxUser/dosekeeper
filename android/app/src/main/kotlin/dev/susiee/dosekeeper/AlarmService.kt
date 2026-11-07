@@ -12,6 +12,7 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -204,6 +205,9 @@ class AlarmService : Service() {
         const val CHANNEL_ID = "dose_alarms"
         private const val FALLBACK_CHANNEL_ID = "dose_alarms_fallback"
         const val NOTIFICATION_ID = 4242
+        // Its own id, not the service's: stopping the service removes whatever sits under
+        // NOTIFICATION_ID, which took a still-unanswered fallback dose with it.
+        private const val FALLBACK_NOTIFICATION_ID = 4244
         private const val RING_TIMEOUT_MS = 5 * 60 * 1000L
         private const val RAMP_START_VOLUME = 0.1f
         private const val RAMP_STEPS = 30
@@ -238,9 +242,7 @@ class AlarmService : Service() {
                 doses.last().id.toInt(),
                 Intent(context, AlarmActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    putExtra(EXTRA_DOSE_IDS, doses.map { it.id }.toLongArray())
-                    putExtra(EXTRA_MED_NAMES, doses.map { it.name }.toTypedArray())
-                    putExtra(EXTRA_DOSAGES, doses.map { it.dosage }.toTypedArray())
+                    putExtras(dosesBundle(doses))
                     putExtra(EXTRA_RING_ON_OPEN, ringOnOpen)
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -261,6 +263,22 @@ class AlarmService : Service() {
                 .build()
         }
 
+        /** The doses as extras: the alarm screen's intent, and the fallback notification. */
+        private fun dosesBundle(doses: List<Due>) = Bundle().apply {
+            putLongArray(EXTRA_DOSE_IDS, doses.map { it.id }.toLongArray())
+            putStringArray(EXTRA_MED_NAMES, doses.map { it.name }.toTypedArray())
+            putStringArray(EXTRA_DOSAGES, doses.map { it.dosage }.toTypedArray())
+        }
+
+        fun dosesFrom(extras: Bundle?): List<Due> {
+            val ids = extras?.getLongArray(EXTRA_DOSE_IDS) ?: return emptyList()
+            val names = extras.getStringArray(EXTRA_MED_NAMES)
+            val dosages = extras.getStringArray(EXTRA_DOSAGES)
+            return ids.mapIndexed { i, id ->
+                Due(id, names?.getOrNull(i) ?: "Medication", dosages?.getOrNull(i) ?: "")
+            }
+        }
+
         /**
          * For when Android won't start this service: on Android 12 the inexact fallback alarm
          * (no "Alarms & reminders" access) gives no right to start one from the background.
@@ -268,6 +286,18 @@ class AlarmService : Service() {
          * Until then (unlocked phone: only a heads-up), the notification itself rings, on repeat.
          */
         fun notifyInstead(context: Context, doseId: Long, medName: String, dosage: String) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            // Two doses due together each land here. Keep the ones already listed: posting
+            // just this one replaced them, and an earlier dose (its alarm already fired and
+            // forgotten) then never showed or rang.
+            val doses = fallbackDoses(nm).apply {
+                removeAll { it.id == doseId }
+                add(Due(doseId, medName, dosage))
+            }
+            postFallback(context, doses.toList())
+        }
+
+        private fun postFallback(context: Context, doses: List<Due>) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { // only Android 12 reaches here
                 nm.createNotificationChannel(
@@ -287,12 +317,26 @@ class AlarmService : Service() {
                         },
                 )
             }
-            val n = buildNotification(context, listOf(Due(doseId, medName, dosage)), ringOnOpen = true, channel = FALLBACK_CHANNEL_ID)
-            n.extras.putLong(AlarmScheduler.EXTRA_DOSE_ID, doseId) // see cancelFallback
+            val n = buildNotification(context, doses, ringOnOpen = true, channel = FALLBACK_CHANNEL_ID)
+            n.extras.putAll(dosesBundle(doses)) // see fallbackDoses
             n.flags = n.flags or Notification.FLAG_INSISTENT // repeat the sound until it's dealt with
-            // Same id as the service's: when the alarm screen starts the ringing, that replaces this.
-            nm.notify(NOTIFICATION_ID, n)
+            // The alarm screen takes its doses off this once it has started them ringing.
+            nm.notify(FALLBACK_NOTIFICATION_ID, n)
         }
+
+        /**
+         * The doses the fallback notification lists. Kept here, not only read back from the
+         * notification: notify() is asynchronous, so a dose posted a moment ago (two doses
+         * due together) may not be listed there yet. Read from the notification only when
+         * this process hasn't posted one yet (it may have been restarted since).
+         * Main thread only: receivers, the alarm screen and the method channel all run there.
+         */
+        private var fallback: MutableList<Due>? = null
+
+        private fun fallbackDoses(nm: NotificationManager): MutableList<Due> =
+            fallback ?: nm.activeNotifications.firstOrNull { it.id == FALLBACK_NOTIFICATION_ID }
+                ?.let { dosesFrom(it.notification.extras) }.orEmpty().toMutableList()
+                .also { fallback = it }
 
         /** The dose was dealt with elsewhere (Today screen): stop it ringing, service or fallback. */
         fun cancelFallback(context: Context, doseId: Long) {
@@ -303,20 +347,24 @@ class AlarmService : Service() {
                     putExtra(EXTRA_DOSE_IDS, longArrayOf(doseId))
                 })
             }
+            dropFallback(context, longArrayOf(doseId))
+        }
+
+        /**
+         * Takes [doseIds] off the fallback notification: answered, or now ringing in the
+         * service. One notification for every dose, so the rest stay on it, still ringing.
+         */
+        fun dropFallback(context: Context, doseIds: LongArray) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            // One id for every dose, so check it's this dose's before clearing it.
-            if (nm.activeNotifications.any {
-                    it.id == NOTIFICATION_ID && it.notification.extras.getLong(AlarmScheduler.EXTRA_DOSE_ID, -1L) == doseId
-                }
-            ) {
-                nm.cancel(NOTIFICATION_ID)
-            }
+            val listed = fallbackDoses(nm)
+            if (!listed.removeAll { it.id in doseIds }) return
+            if (listed.isEmpty()) nm.cancel(FALLBACK_NOTIFICATION_ID) else postFallback(context, listed.toList())
         }
 
         /** [doseIds]: the doses the alarm screen dealt with; one that came due since keeps ringing. */
         fun stop(context: Context, doseIds: LongArray) {
             // Posted by notifyInstead when the service never started, so stopping it won't clear it.
-            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+            dropFallback(context, doseIds)
             context.startService(Intent(context, AlarmService::class.java).apply {
                 action = ACTION_STOP
                 putExtra(EXTRA_DOSE_IDS, doseIds)

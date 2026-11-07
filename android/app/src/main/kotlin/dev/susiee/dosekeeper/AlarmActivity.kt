@@ -26,29 +26,27 @@ class AlarmActivity : Activity() {
         super.onCreate(savedInstanceState)
         showOverLockscreen()
 
-        val ids = intent.getLongArrayExtra(AlarmService.EXTRA_DOSE_IDS) ?: LongArray(0)
-        val names = intent.getStringArrayExtra(AlarmService.EXTRA_MED_NAMES)
-        val dosages = intent.getStringArrayExtra(AlarmService.EXTRA_DOSAGES)
-        doses = ids.mapIndexed { i, id ->
-            AlarmService.Due(id, names?.getOrNull(i) ?: "Medication", dosages?.getOrNull(i) ?: "")
-        }
+        doses = AlarmService.dosesFrom(intent.extras)
 
         setContentView(R.layout.activity_alarm)
 
         // Opened from AlarmService.notifyInstead: nothing is ringing yet. On screen, the app may start it.
         if (savedInstanceState == null && intent.getBooleanExtra(AlarmService.EXTRA_RING_ON_OPEN, false)) {
             runCatching {
-                androidx.core.content.ContextCompat.startForegroundService(
-                    this,
-                    Intent(this, AlarmService::class.java).apply {
-                        action = AlarmService.ACTION_RING
-                        doses.firstOrNull()?.let { // the fallback is always one dose
-                            putExtra(AlarmScheduler.EXTRA_DOSE_ID, it.id)
-                            putExtra(AlarmScheduler.EXTRA_MED_NAME, it.name)
-                            putExtra(AlarmScheduler.EXTRA_DOSAGE, it.dosage)
-                        }
-                    },
-                )
+                // Every listed dose: doses due together share the fallback notification.
+                for (dose in doses) {
+                    androidx.core.content.ContextCompat.startForegroundService(
+                        this,
+                        Intent(this, AlarmService::class.java).apply {
+                            action = AlarmService.ACTION_RING
+                            putExtra(AlarmScheduler.EXTRA_DOSE_ID, dose.id)
+                            putExtra(AlarmScheduler.EXTRA_MED_NAME, dose.name)
+                            putExtra(AlarmScheduler.EXTRA_DOSAGE, dose.dosage)
+                        },
+                    )
+                }
+                // Ringing in the service now: the fallback's own sound must stop for them.
+                AlarmService.dropFallback(this, doses.map { it.id }.toLongArray())
             }.onFailure {
                 // The insistent notification keeps ringing until Taken/Snooze, so this isn't silent.
                 android.util.Log.e("DoseKeeper/Activity", "couldn't start ringing from the alarm screen", it)

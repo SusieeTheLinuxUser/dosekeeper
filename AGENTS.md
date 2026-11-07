@@ -19,6 +19,16 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-07 (review of everything since `dev-1.1.7`): the Android 12 fallback notification
+(`AlarmService.notifyInstead`) now lists **every** dose due at once. It used one shared id,
+so a second dose replaced the first, whose alarm had already fired and been forgotten: that
+dose never showed or rang. Its alarm screen now starts ringing for each listed dose, and
+`cancelFallback`/`stop` take only the handled doses off. The fallback has its own
+notification id (4244), separate from the ringing service's (4242): stopping the service
+removes whatever sits under its id, which used to take an unanswered fallback dose with it.
+The list is kept in memory too, since `notify()` is asynchronous. Build-checked only, like the rest of the
+fallback: no Android 12 device or emulator here.
+
 2026-11-07: the backup folder pick is **two-phase** (issue #30) -- a picked folder is
 pending until the "restore or keep?" question is answered, so an unanswered pick can no
 longer redirect automatic backups. See the Backup & restore entry under "Implemented".
