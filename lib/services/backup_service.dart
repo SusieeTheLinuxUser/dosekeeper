@@ -35,7 +35,7 @@ class BackupService {
 
   Future<Backup> snapshot({DateTime? now}) async => Backup(
         exportedAt: now ?? DateTime.now(),
-        medications: await _db.medications(),
+        medications: await _db.medications(includeDeleted: true),
         doses: await _db.allDoses(),
       );
 

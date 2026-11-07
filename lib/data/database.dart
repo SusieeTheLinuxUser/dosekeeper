@@ -16,7 +16,7 @@ class DoseDatabase {
     final path = p.join(await getDatabasesPath(), 'dosekeeper.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE medications (
@@ -26,7 +26,8 @@ class DoseDatabase {
             times_of_day TEXT NOT NULL,
             days_of_week TEXT NOT NULL,
             active INTEGER NOT NULL DEFAULT 1,
-            notes TEXT NOT NULL DEFAULT ''
+            notes TEXT NOT NULL DEFAULT '',
+            deleted INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -52,6 +53,14 @@ class DoseDatabase {
         if (oldVersion < 2) {
           await db.execute('ALTER TABLE doses ADD COLUMN fired_at INTEGER');
         }
+        // v2 -> v3: soft delete. Deleting a medication used to hard-delete the row,
+        // and ON DELETE CASCADE took its whole dose history with it -- while the
+        // confirm dialog promised the history was kept.
+        if (oldVersion < 3) {
+          await db.execute(
+            'ALTER TABLE medications ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0',
+          );
+        }
       },
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
     );
@@ -59,11 +68,21 @@ class DoseDatabase {
 
   // --- medications ---
 
-  Future<List<Medication>> medications({bool activeOnly = false}) async {
+  /// Deleted medications are hidden unless [includeDeleted] is set -- callers that
+  /// map doses back to names (notifications, backups) need them, user-facing lists
+  /// don't.
+  Future<List<Medication>> medications({
+    bool activeOnly = false,
+    bool includeDeleted = false,
+  }) async {
     final db = await database;
+    final where = [
+      if (activeOnly) 'active = 1',
+      if (!includeDeleted) 'deleted = 0',
+    ].join(' AND ');
     final rows = await db.query(
       'medications',
-      where: activeOnly ? 'active = 1' : null,
+      where: where.isEmpty ? null : where,
       orderBy: 'name COLLATE NOCASE',
     );
     return rows.map(Medication.fromRow).toList();
@@ -77,9 +96,17 @@ class DoseDatabase {
     return med.id!;
   }
 
+  /// Soft delete: keeps the row (and its dose history, via the doses table) and
+  /// flags it instead of removing it. Also deactivates, so nothing schedules for
+  /// it even if a caller ignores [Medication.deleted].
   Future<void> deleteMedication(int id) async {
     final db = await database;
-    await db.delete('medications', where: 'id = ?', whereArgs: [id]);
+    await db.update(
+      'medications',
+      {'deleted': 1, 'active': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   // --- doses ---
@@ -175,6 +202,7 @@ class DoseDatabase {
             daysOfWeek: m.daysOfWeek,
             active: m.active,
             notes: m.notes,
+            deleted: m.deleted,
           ).toRow(),
         );
       }

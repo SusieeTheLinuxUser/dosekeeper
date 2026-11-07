@@ -48,6 +48,7 @@ class Backup {
               'days': m.daysOfWeek.toList()..sort(),
               'active': m.active,
               'notes': m.notes,
+              'deleted': m.deleted,
             },
         ],
         'doses': [
@@ -130,6 +131,8 @@ class Backup {
       daysOfWeek: days,
       active: m['active'] as bool? ?? true,
       notes: m['notes'] as String? ?? '',
+      // `?? false` so backup files from before the flag existed still load.
+      deleted: m['deleted'] as bool? ?? false,
     );
   }
 

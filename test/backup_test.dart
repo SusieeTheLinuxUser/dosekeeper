@@ -132,6 +132,52 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('keeps a soft-deleted medication and its dose history through a round-trip', () {
+      final backup = Backup(
+        exportedAt: DateTime(2026, 9, 24, 22, 10),
+        medications: [
+          Medication(
+            id: 6,
+            name: 'Meds',
+            timesOfDay: [420],
+            daysOfWeek: Medication.everyDay,
+            deleted: true,
+          ),
+        ],
+        doses: [
+          Dose(
+            medicationId: 6,
+            scheduledAt: morning,
+            status: DoseStatus.taken,
+            actionedAt: DateTime(2026, 9, 21, 19, 19),
+            firedAt: morning,
+          ),
+        ],
+      );
+
+      final restored = Backup.decode(backup.encode());
+
+      expect(restored.medications, hasLength(1));
+      expect(restored.medications.single.deleted, isTrue);
+      // The deleted med's dose history must survive -- that's the whole point of
+      // the soft delete.
+      expect(restored.doses, hasLength(1));
+      expect(restored.doses.single.medicationId, 6);
+      expect(restored.doses.single.status, DoseStatus.taken);
+    });
+
+    test('a backup from before the deleted flag decodes as not deleted', () {
+      final json = jsonDecode(sample().encode()) as Map<String, dynamic>;
+      for (final m in json['medications'] as List<dynamic>) {
+        (m as Map<String, dynamic>).remove('deleted');
+      }
+
+      final restored = Backup.decode(jsonEncode(json));
+
+      expect(restored.medications, hasLength(2));
+      expect(restored.medications.every((m) => !m.deleted), isTrue);
+    });
   });
 
   group('Backup files', () {
