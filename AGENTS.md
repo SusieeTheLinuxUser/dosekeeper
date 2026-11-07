@@ -355,6 +355,21 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   to 10 there. The alarm button label ("SNOOZE N MIN") shows the chosen length. Not in
   the JSON folder backup (dose data only); Google backup carries it like any preference.
 
+- **Gradually louder alarm** (`SnoozePrefs.volumeRamp`, Info page "Gradually louder
+  alarm") -- opt-in, **default off**: an alarm must stay full volume unless the user
+  explicitly chooses otherwise. When on, `AlarmService` starts the `MediaPlayer` at 10%
+  (`setVolume`, which only scales against the alarm stream -- the stream volume itself is
+  never touched) and a main-looper `Handler` steps it up evenly to full over 30 seconds,
+  then leaves it at full; when off, ringing behaves exactly as before. Stored in the same
+  native `dosekeeper_settings` prefs file as the snooze length, for the same reason
+  (AlarmService rings while Dart may not be running), and likewise not in the JSON folder
+  backup. Ramp callbacks are cancelled in `releaseRingingResources()`, which covers every
+  stop/release path including a re-ring that replaces the player. The Android-12 fallback
+  ring (`notifyInstead`, a notification sound played by the system) can't ramp -- only the
+  service's own player does. CI-verified only -- **not yet verified on a real device**:
+  check the ramp is audible from quiet up to full, and that Taken/Snooze or a second
+  simultaneous dose mid-ramp never crashes or leaves it stuck quiet.
+
 - **Info page** (`lib/ui/info_page.dart`, app-bar info icon) -- version as Android reports
   it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`). The
   source link hands off to the browser with an intent, so release builds still need no
@@ -409,9 +424,6 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 1. Dose history screen; editing/pausing a med without deleting it.
 
 ### Future feature ideas (not prioritized, not committed to)
-
-Reliability-adjacent — fits the core mission, worth doing before pure nice-to-haves:
-- **Gradually-increasing alarm volume** for heavy sleepers who sleep through a flat tone.
 
 Quality of life:
 - **"As-needed" (PRN) medications** — no fixed schedule, just a manual log button for

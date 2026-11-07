@@ -12,7 +12,9 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -32,6 +34,7 @@ class AlarmService : Service() {
     private var player: MediaPlayer? = null
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var rampHandler: Handler? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -97,7 +100,11 @@ class AlarmService : Service() {
                 )
                 isLooping = true
                 prepare()
+                // Quiet before start(), so not even the first moment plays at full volume.
+                val ramp = SnoozePrefs.volumeRamp(this@AlarmService)
+                if (ramp) setVolume(RAMP_START_VOLUME, RAMP_START_VOLUME)
                 start()
+                if (ramp) startVolumeRamp(this)
             }
             // Make sure the alarm stream is actually audible.
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -111,6 +118,35 @@ class AlarmService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "failed to play alarm sound", e)
         }
+    }
+
+    /**
+     * Opt-in ("Gradually louder alarm" on the Info page): step the volume up evenly from
+     * RAMP_START_VOLUME to full over 30s, then leave it at full. For heavy sleepers a
+     * flat blast doesn't wake. setVolume only scales this player against the alarm
+     * stream's volume; the stream volume itself is never touched.
+     */
+    private fun startVolumeRamp(p: MediaPlayer) {
+        val handler = Handler(Looper.getMainLooper()).also { rampHandler = it }
+        var step = 0
+        val tick = object : Runnable {
+            override fun run() {
+                // releaseRingingResources() cancels these callbacks; the identity check
+                // covers any post that was already queued, so a released or replaced
+                // player is never touched.
+                if (player !== p) return
+                step++
+                if (step >= RAMP_STEPS) {
+                    p.setVolume(1f, 1f)
+                    rampHandler = null
+                    return
+                }
+                val v = RAMP_START_VOLUME + (1f - RAMP_START_VOLUME) * step / RAMP_STEPS
+                p.setVolume(v, v)
+                handler.postDelayed(this, RAMP_STEP_MS)
+            }
+        }
+        handler.postDelayed(tick, RAMP_STEP_MS)
     }
 
     private fun startVibrating() {
@@ -136,6 +172,10 @@ class AlarmService : Service() {
     }
 
     private fun releaseRingingResources() {
+        // Cancel the volume ramp first: its callbacks must never touch the player below
+        // once it's released (this runs on a re-ring too, before the new player starts).
+        rampHandler?.removeCallbacksAndMessages(null)
+        rampHandler = null
         // stop() throws if the player never started (e.g. prepare() failed). release()
         // must still run, or the native player leaks for the life of the process.
         player?.let { p ->
@@ -165,6 +205,9 @@ class AlarmService : Service() {
         private const val FALLBACK_CHANNEL_ID = "dose_alarms_fallback"
         const val NOTIFICATION_ID = 4242
         private const val RING_TIMEOUT_MS = 5 * 60 * 1000L
+        private const val RAMP_START_VOLUME = 0.1f
+        private const val RAMP_STEPS = 30
+        private const val RAMP_STEP_MS = 1000L
         const val EXTRA_RING_ON_OPEN = "ring_on_open"
 
         private fun createChannel(context: Context) {

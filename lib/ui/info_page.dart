@@ -23,6 +23,7 @@ class InfoPage extends StatefulWidget {
 class _InfoPageState extends State<InfoPage> {
   final _version = AlarmBridge.appVersion();
   var _snoozeMinutes = AlarmBridge.getSnoozeMinutes();
+  var _volumeRamp = AlarmBridge.getVolumeRamp();
   var _versionTaps = 0;
 
   /// Android makes you a developer after tapping the build number. Here, nobody came.
@@ -86,6 +87,23 @@ class _InfoPageState extends State<InfoPage> {
                     snapshot.data == null ? '…' : '${snapshot.data} min',
                   ),
                 ),
+              ),
+            ),
+            // Opt-in, default off: an alarm must stay full volume unless the user
+            // explicitly chooses otherwise (the app exists because alarms must fire).
+            FutureBuilder<bool>(
+              future: _volumeRamp,
+              builder: (_, snapshot) => SwitchListTile(
+                title: const Text('Gradually louder alarm'),
+                subtitle: const Text(
+                  'Starts quiet and reaches full volume over 30 seconds',
+                ),
+                value: snapshot.data ?? false,
+                onChanged: (enabled) async {
+                  await AlarmBridge.setVolumeRamp(enabled);
+                  if (!mounted) return;
+                  setState(() => _volumeRamp = AlarmBridge.getVolumeRamp());
+                },
               ),
             ),
             const ListTile(title: Text('License'), subtitle: Text('MIT')),
