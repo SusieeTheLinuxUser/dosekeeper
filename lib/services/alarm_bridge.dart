@@ -61,15 +61,19 @@ class AlarmBridge {
   /// Notification for doses past their grace period, as of [shownAt]. Stays until
   /// [clearOutstandingNotification] is called or the user swipes it away, which
   /// discards those doses for good: see [outstandingDismissedThrough].
+  /// [doseId] is set only when it covers exactly one dose, which gives it Taken/Skip
+  /// action buttons; with several doses the tap just opens the app.
   static Future<void> updateOutstandingNotification({
     required String title,
     required String text,
     required DateTime shownAt,
+    int? doseId,
   }) =>
       _channel.invokeMethod('updateOutstandingNotification', {
         'title': title,
         'text': text,
         'shownAt': shownAt.millisecondsSinceEpoch,
+        'doseId': ?doseId,
       });
 
   /// The [updateOutstandingNotification] `shownAt` of the last notification the user
@@ -96,7 +100,8 @@ class AlarmBridge {
   static Future<void> testAlarm(int seconds) =>
       _channel.invokeMethod('testAlarm', {'seconds': seconds});
 
-  /// Outcomes the native alarm screen recorded while Dart was not running.
+  /// Outcomes the native alarm screen (or a missed-notification Taken/Skip button)
+  /// recorded while Dart was not running.
   static Future<List<PendingAlarmAction>> drainPendingActions() async {
     final raw = await _channel.invokeMethod<List<dynamic>>('drainPendingActions');
     return (raw ?? [])
@@ -125,10 +130,11 @@ class PendingAlarmAction {
   });
 
   final int doseId;
-  final String action; // TAKEN | SNOOZE
+  final String action; // TAKEN | SKIPPED | SNOOZE
   final DateTime at;
 
   bool get isTaken => action == 'TAKEN';
+  bool get isSkipped => action == 'SKIPPED';
 
   static PendingAlarmAction fromMap(Map<String, dynamic> m) => PendingAlarmAction(
         doseId: (m['doseId'] as num).toInt(),

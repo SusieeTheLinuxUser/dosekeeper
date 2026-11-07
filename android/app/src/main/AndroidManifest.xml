@@ -63,6 +63,11 @@
             android:name=".OutstandingDismissedReceiver"
             android:exported="false" />
 
+        <!-- Taken/Skip on the missed-dose notification: a receiver so the screen doesn't open. -->
+        <receiver
+            android:name=".OutstandingActionReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true"

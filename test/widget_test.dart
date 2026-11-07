@@ -152,6 +152,42 @@ void main() {
     });
   });
 
+  group('DoseScheduler.singleActionableDoseId', () {
+    final dose = Dose(id: 42, medicationId: 1, scheduledAt: DateTime(2026, 11, 2, 7));
+
+    test('exactly one missed dose gets the notification buttons', () {
+      expect(DoseScheduler.singleActionableDoseId([dose]), 42);
+    });
+
+    test('two or more missed doses get no buttons -- one tap must not mark several', () {
+      final other =
+          Dose(id: 43, medicationId: 2, scheduledAt: DateTime(2026, 11, 2, 8));
+      expect(DoseScheduler.singleActionableDoseId([dose, other]), isNull);
+      expect(DoseScheduler.singleActionableDoseId([]), isNull);
+    });
+
+    test('an unsaved dose (no id yet) gets no buttons', () {
+      expect(
+        DoseScheduler.singleActionableDoseId(
+          [Dose(medicationId: 1, scheduledAt: DateTime(2026, 11, 2, 7))],
+        ),
+        isNull,
+      );
+    });
+  });
+
+  test('a SKIPPED outcome from the notification parses like the alarm screen\'s TAKEN',
+      () {
+    final skipped = PendingAlarmAction.fromMap(
+        {'doseId': 5, 'action': 'SKIPPED', 'at': 1000});
+    expect(skipped.isSkipped, isTrue);
+    expect(skipped.isTaken, isFalse);
+    final taken =
+        PendingAlarmAction.fromMap({'doseId': 6, 'action': 'TAKEN', 'at': 1000});
+    expect(taken.isTaken, isTrue);
+    expect(taken.isSkipped, isFalse);
+  });
+
   group('AdherenceGrid.mondayOf', () {
     test('steps back to Monday from mid-week', () {
       expect(AdherenceGrid.mondayOf(DateTime(2026, 9, 24)), DateTime(2026, 9, 21)); // Thu -> Mon

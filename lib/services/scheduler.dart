@@ -28,6 +28,9 @@ class DoseScheduler {
   /// dose creation is idempotent on (medication, scheduled_at).
   Future<void> sync({DateTime? now}) async {
     final start = now ?? DateTime.now();
+    // First, so a dose answered natively (alarm screen, or Taken/Skip on the missed-dose
+    // notification) is never re-listed as missed by the notification update below.
+    await applyPendingAlarmActions();
     final meds = await _db.medications(activeOnly: true);
 
     await _materialiseDoses(meds, start);
@@ -69,6 +72,12 @@ class DoseScheduler {
       await _db.setDoseFiredAt(event.doseId, event.firedAt);
     }
   }
+
+  /// The missed-dose notification gets Taken/Skip buttons only when it covers exactly
+  /// one dose: marking several at once from a notification is too easy to get wrong
+  /// for medication, so then the tap just opens the app.
+  static int? singleActionableDoseId(List<Dose> missed) =>
+      missed.length == 1 ? missed.single.id : null;
 
   /// Doses to notify about: missed now, and not yet missed when the user last swiped
   /// the notification away. Those already were, so that swipe discarded them -- and a
@@ -113,6 +122,7 @@ class DoseScheduler {
       title: overdue.length == 1 ? '1 dose missed' : '${overdue.length} doses missed',
       text: names,
       shownAt: now,
+      doseId: singleActionableDoseId(overdue),
     );
   }
 
@@ -149,7 +159,8 @@ class DoseScheduler {
     unarmedAlarms = failed;
   }
 
-  /// Applies outcomes the native alarm screen recorded while Dart wasn't running.
+  /// Applies outcomes the native alarm screen (or a missed-notification Taken/Skip
+  /// button) recorded while Dart wasn't running.
   Future<void> applyPendingAlarmActions() async {
     final pending = await AlarmBridge.drainPendingActions();
     for (final action in pending) {
@@ -157,6 +168,8 @@ class DoseScheduler {
       if (dose == null) continue;
       if (action.isTaken) {
         await _db.setDoseStatus(action.doseId, DoseStatus.taken, at: action.at);
+      } else if (action.isSkipped) {
+        await _db.setDoseStatus(action.doseId, DoseStatus.skipped, at: action.at);
       }
       // SNOOZE re-arms itself natively; the dose stays pending on purpose.
     }
