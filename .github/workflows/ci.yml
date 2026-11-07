@@ -23,6 +23,11 @@ jobs:
       - run: flutter test
         env:
           TZ: Europe/Warsaw
+      # A zone whose spring-forward gap starts at 23:00, so the slot that crosses
+      # midnight is really tested (it skips everywhere else).
+      - run: flutter test test/dst_test.dart
+        env:
+          TZ: America/Nuuk
 
       # Catches native Kotlin build breakage that analyze/test can't see.
       - run: flutter build apk --debug

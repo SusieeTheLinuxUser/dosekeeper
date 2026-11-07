@@ -62,10 +62,11 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _chooseFolder() => _run(() async {
-        _service.holdAutomatic = true;
+        _service.holds++;
         try {
           // A backup queued just before the hold must not land in the new folder.
           await _service.backupsIdle;
+          if (!mounted) return; // left the page while waiting
           final picked = await BackupBridge.pickFolder();
           if (picked == null) return; // backed out
 
@@ -83,7 +84,7 @@ class _BackupPageState extends State<BackupPage> {
           await _service.backUp();
           _toast('Backups will be saved to ${picked.folderName}');
         } finally {
-          _service.holdAutomatic = false;
+          _service.holds--;
         }
       });
 
