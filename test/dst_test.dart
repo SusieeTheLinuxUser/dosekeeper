@@ -17,4 +17,28 @@ void main() {
       }
     }
   });
+
+  test('a dose in the spring-forward gap still matches its slot', () {
+    // 02:30 does not exist on this day, so slot() shifts it. Comparing instants keeps
+    // it a real dose instead of an orphan that gets deleted and never rings.
+    const gapMed = Medication(
+      id: 1,
+      name: 'A',
+      timesOfDay: [150],
+      daysOfWeek: Medication.everyDay,
+    );
+    final at = DoseScheduler.slot(DateTime(2026, 3, 29), 150);
+
+    expect(gapMed.coversSlot(at), isTrue);
+  });
+
+  test('a late slot pushed past midnight by the gap still matches its slot', () {
+    // Only in a zone whose gap starts at 23:00, e.g. TZ=America/Nuuk on 2026-03-28.
+    final saturday = DateTime(2026, 3, 28);
+    final at = DoseScheduler.slot(saturday, 1410);
+    if (at.day == saturday.day) return markTestSkipped('no gap at 23:30 in this zone');
+    const satMed = Medication(id: 1, name: 'A', timesOfDay: [1410], daysOfWeek: {6});
+
+    expect(satMed.coversSlot(at), isTrue);
+  });
 }

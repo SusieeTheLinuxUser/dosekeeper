@@ -35,8 +35,18 @@ class Medication {
   /// would otherwise sit in the database forever, still pending, still getting a real
   /// alarm armed for it -- invisible in the editor because it no longer belongs to any
   /// time the medication actually lists.
+  ///
+  /// Compared as instants, not as "hour * 60 + minute": a time inside the spring-forward
+  /// gap gets shifted by DateTime, and the shifted hour would look like an orphan.
+  /// The day before is checked too: where the gap starts at 23:00 (America/Nuuk), a
+  /// 23:30 slot lands on the next calendar day.
   bool coversSlot(DateTime scheduledAt) =>
-      active && occursOn(scheduledAt) && timesOfDay.contains(scheduledAt.hour * 60 + scheduledAt.minute);
+      active &&
+      [0, 1].any((back) {
+        final day = DateTime(scheduledAt.year, scheduledAt.month, scheduledAt.day - back);
+        return occursOn(day) &&
+            timesOfDay.any((t) => DateTime(day.year, day.month, day.day, 0, t) == scheduledAt);
+      });
 
   /// Formats "minutes past midnight" as e.g. "09:00".
   static String formatTime(int minutes) =>
