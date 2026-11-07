@@ -345,7 +345,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   in its own native SharedPreferences file (`dosekeeper_settings`), not Dart or the DB,
   because `AlarmActivity` snoozes while Dart may not be running; unknown values fall back
   to 10 there. The alarm button label ("SNOOZE N MIN") shows the chosen length. Not in
-  the backup format on purpose: it's a device preference, not dose data.
+  the JSON folder backup (dose data only); Google backup carries it like any preference.
 
 - **Info page** (`lib/ui/info_page.dart`, app-bar info icon) -- version as Android reports
   it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`). The

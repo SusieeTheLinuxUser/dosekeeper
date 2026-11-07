@@ -7,8 +7,9 @@ import android.content.Context
  * because the alarm screen snoozes while the Dart engine may not be running at all --
  * Dart only ever reads/writes it through the MethodChannel for the settings UI.
  *
- * A device preference, deliberately NOT in the JSON backup: it isn't dose data, and a
- * restore onto another phone shouldn't drag settings along.
+ * Not in the JSON folder backup: that holds medications and dose history only. Google
+ * backup (opt-in) does carry it, like every other preference, which is fine: a setting
+ * following the user to a new phone is what they'd expect.
  */
 object SnoozePrefs {
     private const val PREFS = "dosekeeper_settings"
