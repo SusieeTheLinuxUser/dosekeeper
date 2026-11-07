@@ -214,6 +214,14 @@ class MainActivity : FlutterActivity() {
                         result.success(packageManager.getPackageInfo(packageName, 0).versionName)
                     }
 
+                    /** The snooze length in minutes; native, so it works while Dart isn't running. */
+                    "getSnoozeMinutes" -> result.success(SnoozePrefs.snoozeMinutes(this))
+
+                    "setSnoozeMinutes" -> {
+                        SnoozePrefs.setSnoozeMinutes(this, (call.argument<Number>("minutes") ?: 10).toInt())
+                        result.success(SnoozePrefs.snoozeMinutes(this))
+                    }
+
                     "openUrl" -> {
                         try {
                             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url"))))

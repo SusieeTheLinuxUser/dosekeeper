@@ -22,6 +22,7 @@ class InfoPage extends StatefulWidget {
 
 class _InfoPageState extends State<InfoPage> {
   final _version = AlarmBridge.appVersion();
+  var _snoozeMinutes = AlarmBridge.getSnoozeMinutes();
   var _versionTaps = 0;
 
   /// Android makes you a developer after tapping the build number. Here, nobody came.
@@ -60,6 +61,32 @@ class _InfoPageState extends State<InfoPage> {
               subtitle: const Text('github.com/SusieeTheLinuxUser/dosekeeper'),
               trailing: const Icon(Icons.open_in_new),
               onTap: _openSource,
+            ),
+            // How long the alarm screen's Snooze waits before ringing again.
+            // Native-backed (see AlarmBridge.getSnoozeMinutes): the alarm screen
+            // snoozes without Dart running.
+            ListTile(
+              title: const Text('Snooze length'),
+              subtitle: const Text('How long the alarm waits before ringing again'),
+              trailing: FutureBuilder<int>(
+                future: _snoozeMinutes,
+                builder: (_, snapshot) => PopupMenuButton<int>(
+                  initialValue: snapshot.data,
+                  tooltip: 'Snooze length',
+                  onSelected: (minutes) async {
+                    await AlarmBridge.setSnoozeMinutes(minutes);
+                    if (!mounted) return;
+                    setState(() => _snoozeMinutes = AlarmBridge.getSnoozeMinutes());
+                  },
+                  itemBuilder: (_) => [
+                    for (final m in AlarmBridge.snoozeChoices)
+                      PopupMenuItem(value: m, child: Text('$m min')),
+                  ],
+                  child: Text(
+                    snapshot.data == null ? '…' : '${snapshot.data} min',
+                  ),
+                ),
+              ),
             ),
             const ListTile(title: Text('License'), subtitle: Text('MIT')),
             const ListTile(
