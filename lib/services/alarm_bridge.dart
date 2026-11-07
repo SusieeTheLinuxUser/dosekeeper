@@ -51,6 +51,13 @@ class AlarmBridge {
   static Future<void> requestNotificationPermission() =>
       _channel.invokeMethod('requestNotificationPermission');
 
+  /// Android 14+: the lockscreen takeover also needs this switch on. Always true below 14.
+  static Future<bool> canUseFullScreenIntent() async =>
+      await _channel.invokeMethod<bool>('canUseFullScreenIntent') ?? true;
+
+  static Future<void> openFullScreenIntentSettings() =>
+      _channel.invokeMethod('openFullScreenIntentSettings');
+
   /// Notification for doses past their grace period, as of [shownAt]. Stays until
   /// [clearOutstandingNotification] is called or the user swipes it away, which
   /// discards those doses for good: see [outstandingDismissedThrough].

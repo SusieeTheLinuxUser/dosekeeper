@@ -251,8 +251,15 @@ class AlarmService : Service() {
             nm.notify(NOTIFICATION_ID, n)
         }
 
-        /** The dose was dealt with elsewhere (Today screen): stop its fallback notification ringing. */
+        /** The dose was dealt with elsewhere (Today screen): stop it ringing, service or fallback. */
         fun cancelFallback(context: Context, doseId: Long) {
+            // Marked taken on Today while the service rings for it: without this it kept ringing.
+            if (doseId in ringing) {
+                context.startService(Intent(context, AlarmService::class.java).apply {
+                    action = ACTION_STOP
+                    putExtra(EXTRA_DOSE_IDS, longArrayOf(doseId))
+                })
+            }
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             // One id for every dose, so check it's this dose's before clearing it.
             if (nm.activeNotifications.any {

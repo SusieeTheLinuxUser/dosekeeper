@@ -25,6 +25,7 @@ class TodayPageState extends State<TodayPage> {
   int _unarmed = 0;
   bool _batteryOk = true;
   bool _notificationsOk = true;
+  bool _fullScreenOk = true;
   // Battery *level*, distinct from _batteryOk (the optimisation whitelist).
   bool _batteryLevelOk = true;
   bool _backupsOn = true;
@@ -50,6 +51,7 @@ class TodayPageState extends State<TodayPage> {
     final exact = await AlarmBridge.canScheduleExact();
     final battery = await AlarmBridge.isIgnoringBatteryOptimizations();
     final notifications = await AlarmBridge.hasNotificationPermission();
+    final fullScreen = await AlarmBridge.canUseFullScreenIntent();
     final batteryLow = await AlarmBridge.isBatteryLow();
     // After sync, so the backup includes anything just drained from the alarm screen.
     final backup = await BackupService.instance.backUpQuietly();
@@ -69,6 +71,7 @@ class TodayPageState extends State<TodayPage> {
       _unarmed = widget.scheduler.unarmedAlarms;
       _batteryOk = battery;
       _notificationsOk = notifications;
+      _fullScreenOk = fullScreen;
       _batteryLevelOk = !batteryLow;
       // A failed status read counts as "on": the failure itself is shown instead.
       _backupsOn = backup?.enabled ?? true;
@@ -107,6 +110,17 @@ class TodayPageState extends State<TodayPage> {
           actionLabel: 'Fix',
           onAction: () async {
             await AlarmBridge.requestNotificationPermission();
+            await Future<void>.delayed(const Duration(seconds: 1));
+            await refresh();
+          },
+        ),
+      if (_notificationsOk && !_fullScreenOk)
+        _Warning(
+          text: 'Full-screen alarms are off. The alarm will ring but won\'t take '
+              'over the lockscreen.',
+          actionLabel: 'Fix',
+          onAction: () async {
+            await AlarmBridge.openFullScreenIntentSettings();
             await Future<void>.delayed(const Duration(seconds: 1));
             await refresh();
           },
