@@ -11,7 +11,7 @@ class BackupBridge {
 
   /// Opens the system folder picker. The picked folder is *pending*, not active: it
   /// only becomes the backup folder via [confirmFolder]. Returns the pending folder's
-  /// name, or null if the user backed out (then nothing is pending).
+  /// name, or null if the user backed out.
   static Future<String?> pickFolder() async {
     final raw = await _channel.invokeMapMethod<String, Object?>('pickBackupFolder');
     return raw?['folderName'] as String?;
