@@ -241,10 +241,28 @@ class MainActivity : FlutterActivity() {
                         REQ_PICK_BACKUP_FOLDER,
                     )
 
-                    "listBackups" -> io(result) { BackupStore.list(this) }
+                    "listBackups" -> io(result) {
+                        BackupStore.list(this, pending = call.argument<Boolean>("pending") == true)
+                    }
 
                     "readBackup" -> io(result) {
-                        BackupStore.read(this, call.argument<String>("name")!!)
+                        BackupStore.read(
+                            this,
+                            call.argument<String>("name")!!,
+                            pending = call.argument<Boolean>("pending") == true,
+                        )
+                    }
+
+                    /** The user answered "keep" or restored: the pending folder becomes active. */
+                    "confirmBackupFolder" -> io(result) {
+                        BackupStore.confirmPendingFolder(this)
+                        true
+                    }
+
+                    /** Any other exit from the folder pick: the pending folder goes away. */
+                    "discardBackupFolder" -> io(result) {
+                        BackupStore.discardPendingFolder(this)
+                        true
                     }
 
                     "writeBackup" -> io(result) {
@@ -311,10 +329,9 @@ class MainActivity : FlutterActivity() {
             return
         }
         when (requestCode) {
-            REQ_PICK_BACKUP_FOLDER -> io(result) {
-                BackupStore.setFolder(this, uri)
-                BackupStore.status(this)
-            }
+            // Pending, not active: Dart still has to ask "restore or keep?" and only a
+            // confirmBackupFolder makes this the backup folder (see BackupStore).
+            REQ_PICK_BACKUP_FOLDER -> io(result) { BackupStore.setPendingFolder(this, uri) }
             REQ_PICK_BACKUP_FILE -> io(result) { BackupStore.readUri(this, uri) }
         }
     }

@@ -19,6 +19,10 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-07: the backup folder pick is **two-phase** (issue #30) -- a picked folder is
+pending until the "restore or keep?" question is answered, so an unanswered pick can no
+longer redirect automatic backups. See the Backup & restore entry under "Implemented".
+
 2026-11-07: deleting a medication is a **soft delete** (`medications.deleted`, DB v3) -- a hard
 DELETE cascaded through `doses` and destroyed the whole history the confirm dialog promised to
 keep; the row stays, flagged `deleted = 1` + `active = 0`, hidden from user-facing lists.
@@ -372,6 +376,15 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
     that already has backups offers to restore first; restore is always confirmed, is
     one SQLite transaction, re-ids everything, and first drains native outcomes and
     cancels every armed alarm (incl. snoozes) so no orphaned alarm survives it.
+  - Two-phase folder pick (2026-11-07, issue #30): a picked folder is stored *pending*
+    (pref `pending_tree_uri`), not active, until Dart's "restore or keep?" is answered
+    and `confirmBackupFolder` moves it to `tree_uri`; every other exit calls
+    `discardBackupFolder`. Before this, the picker made the folder active immediately,
+    and leaving the dialog unanswered (killed app, closed page, unreadable folder) could
+    let the next automatic backup write into a folder the user never confirmed.
+    Automatic backups only ever use `tree_uri`; a leftover pending folder is discarded
+    on the next pick. The old Dart-side `holds`/`backupsIdle` guards are gone -- the
+    pending folder is invisible to automatic backups natively, so no hold is needed.
   - Today screen warns "Backups are off" (no folder / permission gone) and "Automatic
     backup failed: …", same pattern as the alarm-path warnings.
   - Restore verified on hardware 2026-09-24; see "Earlier on 2026-09-24" for what's left.

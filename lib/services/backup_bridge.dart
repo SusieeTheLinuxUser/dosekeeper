@@ -9,11 +9,19 @@ class BackupBridge {
         await _channel.invokeMapMethod<String, Object?>('backupStatus') ?? const {},
       );
 
-  /// Opens the system folder picker. Null if the user backed out.
-  static Future<BackupFolderStatus?> pickFolder() async {
+  /// Opens the system folder picker. The picked folder is *pending*, not active: it
+  /// only becomes the backup folder via [confirmFolder]. Returns the pending folder's
+  /// name, or null if the user backed out (then nothing is pending).
+  static Future<String?> pickFolder() async {
     final raw = await _channel.invokeMapMethod<String, Object?>('pickBackupFolder');
-    return raw == null ? null : BackupFolderStatus.fromMap(raw);
+    return raw?['folderName'] as String?;
   }
+
+  /// Makes the pending folder the backup folder.
+  static Future<void> confirmFolder() => _channel.invokeMethod('confirmBackupFolder');
+
+  /// Drops the pending folder without making it active; releases its grant.
+  static Future<void> discardFolder() => _channel.invokeMethod('discardBackupFolder');
 
   /// Whether Android's Google backup may copy app data. Off unless the user turns it on.
   static Future<bool> googleBackupEnabled() async =>
@@ -22,11 +30,14 @@ class BackupBridge {
   static Future<void> setGoogleBackupEnabled(bool enabled) =>
       _channel.invokeMethod('setGoogleBackupEnabled', {'enabled': enabled});
 
-  static Future<List<String>> list() async =>
-      await _channel.invokeListMethod<String>('listBackups') ?? const [];
+  /// Lists the backup folder, or the pending one with [pending] (a folder just picked
+  /// that has not been confirmed yet).
+  static Future<List<String>> list({bool pending = false}) async =>
+      await _channel.invokeListMethod<String>('listBackups', {'pending': pending}) ??
+      const [];
 
-  static Future<String> read(String name) async =>
-      (await _channel.invokeMethod<String>('readBackup', {'name': name}))!;
+  static Future<String> read(String name, {bool pending = false}) async =>
+      (await _channel.invokeMethod<String>('readBackup', {'name': name, 'pending': pending}))!;
 
   static Future<void> write(String name, String content) =>
       _channel.invokeMethod('writeBackup', {'name': name, 'content': content});
