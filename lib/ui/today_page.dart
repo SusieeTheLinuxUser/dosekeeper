@@ -39,8 +39,7 @@ class TodayPageState extends State<TodayPage> {
   }
 
   Future<void> refresh() async {
-    await widget.scheduler.applyPendingAlarmActions();
-    await widget.scheduler.sync();
+    await widget.scheduler.sync(); // applies alarm-screen/notification answers first
 
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);

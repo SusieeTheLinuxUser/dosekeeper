@@ -23,9 +23,19 @@ object OutstandingNotifier {
     private const val CHANNEL_ID = "outstanding_doses"
     private const val NOTIFICATION_ID = 4243
     const val KEY_DISMISSED_THROUGH = "outstanding_dismissed_through"
+    const val EXTRA_ACTION = "outstanding_action"
+    const val ACTION_TAKEN = "TAKEN" // the strings Dart's drainPendingActions expects
+    const val ACTION_SKIPPED = "SKIPPED"
+    private const val REQ_TAKEN = 1
+    private const val REQ_SKIPPED = 2
 
-    /** [shownAt] is the moment the listed doses were worked out, so a swipe discards only those. */
-    fun show(context: Context, title: String, text: String, shownAt: Long) {
+    /**
+     * [shownAt] is the moment the listed doses were worked out, so a swipe discards only those.
+     * [doseId] is set only when the notification covers exactly one dose -- it then gets
+     * Taken/Skip buttons. With several, one tap resolving them all is too easy to get
+     * wrong for medication, so the tap just opens the app as before.
+     */
+    fun show(context: Context, title: String, text: String, shownAt: Long, doseId: Long? = null) {
         createChannel(context)
 
         val openApp = PendingIntent.getActivity(
@@ -47,7 +57,7 @@ object OutstandingNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title)
             .setContentText(text)
@@ -56,10 +66,34 @@ object OutstandingNotifier {
             .setAutoCancel(false)
             .setContentIntent(openApp)
             .setDeleteIntent(dismissed)
-            .build()
+
+        if (doseId != null) {
+            builder.addAction(resolveAction(context, doseId, ACTION_TAKEN, "Taken", REQ_TAKEN))
+            builder.addAction(resolveAction(context, doseId, ACTION_SKIPPED, "Skip", REQ_SKIPPED))
+        }
 
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(NOTIFICATION_ID, notification)
+            .notify(NOTIFICATION_ID, builder.build())
+    }
+
+    // Distinct request codes and data per action, or Taken and Skip share one PendingIntent.
+    private fun resolveAction(
+        context: Context,
+        doseId: Long,
+        action: String,
+        label: String,
+        requestCode: Int,
+    ): NotificationCompat.Action {
+        val tapped = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            Intent(context, OutstandingActionReceiver::class.java)
+                .setData(Uri.parse("dosekeeper://outstanding/$doseId/$action"))
+                .putExtra(AlarmScheduler.EXTRA_DOSE_ID, doseId)
+                .putExtra(EXTRA_ACTION, action),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Action.Builder(null, label, tapped).build()
     }
 
     fun clear(context: Context) {
@@ -91,5 +125,32 @@ class OutstandingDismissedReceiver : BroadcastReceiver() {
             .edit()
             .putLong(OutstandingNotifier.KEY_DISMISSED_THROUGH, through)
             .apply()
+    }
+}
+
+/**
+ * Taken/Skip tapped on the missed-dose notification. A receiver, not an activity, so the
+ * screen stays where it is (this must work from the lockscreen). Records the outcome in
+ * the same SharedPreferences record the alarm screen writes and Dart already drains --
+ * no second outcome store. Dart may not be running now; the next sync applies it.
+ */
+class OutstandingActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val doseId = intent.getLongExtra(AlarmScheduler.EXTRA_DOSE_ID, -1L)
+        val action = intent.getStringExtra(OutstandingNotifier.EXTRA_ACTION)
+        if (doseId < 0 ||
+            (action != OutstandingNotifier.ACTION_TAKEN && action != OutstandingNotifier.ACTION_SKIPPED)
+        ) {
+            return
+        }
+        context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("pending_action_$doseId", action)
+            .putLong("pending_action_at_$doseId", System.currentTimeMillis())
+            .apply()
+        // Anything still armed or ringing for the dose -- e.g. a snooze alarm set before
+        // it became missed -- must not ring for a dose that's now resolved.
+        AlarmScheduler.cancel(context, doseId)
+        OutstandingNotifier.clear(context)
     }
 }

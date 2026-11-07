@@ -238,6 +238,8 @@ class MainActivity : FlutterActivity() {
                             title = call.argument<String>("title") ?: "Missed dose",
                             text = call.argument<String>("text") ?: "",
                             shownAt = call.argument<Number>("shownAt")?.toLong() ?: 0L,
+                            // Exactly one missed dose: the notification gets Taken/Skip buttons.
+                            doseId = call.argument<Number>("doseId")?.toLong(),
                         )
                         result.success(true)
                     }

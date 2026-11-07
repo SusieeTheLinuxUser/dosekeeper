@@ -275,6 +275,14 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   purpose: a dose back-filled after a swipe (a medication added or edited with a time up to
   12h ago, which never had an alarm) doesn't notify if it was already overdue when the swiped
   notification was shown. The Today screen still lists it.
+- **Taken/Skip on the missed-dose notification** (`OutstandingActionReceiver` in
+  `OutstandingNotifier.kt`, `DoseScheduler.singleActionableDoseId`) -- only when the
+  notification covers exactly one dose; with several, marking them all from one tap is too
+  easy to get wrong, so the tap just opens the app. A receiver (no screen opens) writes the
+  same `pending_action_<id>` record the alarm screen does (`SKIPPED` is new), cancels any
+  armed alarm/snooze for the dose, and clears the notification. `sync()` now applies these
+  records first, so no caller can re-list an answered dose as missed. Unit-tested and
+  CI-built only -- **not yet verified on the real device**.
 - **GitHub-style adherence grid** (`lib/ui/adherence_grid.dart`) — on the Today screen,
   above the dose list. One column per week, one row per weekday, coloured by taken/total
   for that day (grey = no dose that day, red = fully missed, green shades = partial-to-full).
@@ -403,9 +411,6 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 ### Future feature ideas (not prioritized, not committed to)
 
 Reliability-adjacent — fits the core mission, worth doing before pure nice-to-haves:
-- **Taken/Skip action buttons directly on the missed-dose notification** — right now
-  clearing it means opening the app; a notification action would let you resolve it
-  from the lock screen, same spirit as the alarm screen itself.
 - **Gradually-increasing alarm volume** for heavy sleepers who sleep through a flat tone.
 
 Quality of life:
