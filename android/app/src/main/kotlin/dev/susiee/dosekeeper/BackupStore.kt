@@ -190,6 +190,9 @@ object BackupStore {
      * document has no stale bytes to truncate, so the old "wt"-or-recreate dance
      * (and its delete-first data-loss window) is gone entirely.
      */
+    // Each channel call runs on its own thread; overlapping writes would interleave
+    // their create/delete/rename steps, so one write runs at a time.
+    @Synchronized
     fun write(context: Context, name: String, content: String) {
         val tree = requireFolder(context)
         val bytes = content.toByteArray(Charsets.UTF_8)
@@ -202,10 +205,13 @@ object BackupStore {
             DocumentsContract.getTreeDocumentId(tree),
         )
 
-        // A leftover temp means a previous write died mid-swap. If today's file
-        // survived, the temp is junk; if not, the temp is the only complete copy.
+        // A leftover temp means a previous write died. If today's file survived, the
+        // temp is junk; if not, the temp is the only copy -- unless the death came
+        // mid-write on the day's first backup, so install it only if it parses.
         find(context, tree, tmpName)?.let { leftover ->
-            if (find(context, tree, name) != null) {
+            val complete = find(context, tree, name) == null &&
+                runCatching { org.json.JSONObject(readUri(context, leftover)) }.isSuccess
+            if (!complete) {
                 deleteOrThrow(context, leftover, tmpName)
             } else if (!install(context, parent, leftover, name)) {
                 // Keep the temp: it is the only complete copy of that backup.
