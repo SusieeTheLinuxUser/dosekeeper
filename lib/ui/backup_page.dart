@@ -64,6 +64,8 @@ class _BackupPageState extends State<BackupPage> {
   Future<void> _chooseFolder() => _run(() async {
         _service.holdAutomatic = true;
         try {
+          // A backup queued just before the hold must not land in the new folder.
+          await _service.backupsIdle;
           final picked = await BackupBridge.pickFolder();
           if (picked == null) return; // backed out
 
@@ -90,7 +92,10 @@ class _BackupPageState extends State<BackupPage> {
         // Dismissing must not fall through to the overwrite branch: one of the two
         // buttons has to be the answer.
         barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
+        // The system Back button would otherwise return null, the same as "keep".
+        builder: (ctx) => PopScope(
+          canPop: false,
+          child: AlertDialog(
           title: const Text('This folder has backups'),
           content: Text(
             'The newest is from ${Backup.dayOf(newest)}.\n\n'
@@ -107,6 +112,7 @@ class _BackupPageState extends State<BackupPage> {
               child: const Text('Restore'),
             ),
           ],
+          ),
         ),
       );
 

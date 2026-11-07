@@ -53,6 +53,9 @@ class BackupService {
 
   Future<void> _running = Future.value();
 
+  /// Completes once every backup already queued has finished.
+  Future<void> get backupsIdle => _running;
+
   Future<BackupFolderStatus> _backUp({DateTime? now}) async {
     final status = await BackupBridge.status();
     if (!status.enabled) return status;

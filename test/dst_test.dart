@@ -31,4 +31,14 @@ void main() {
 
     expect(gapMed.coversSlot(at), isTrue);
   });
+
+  test('a late slot pushed past midnight by the gap still matches its slot', () {
+    // Only in a zone whose gap starts at 23:00, e.g. TZ=America/Nuuk on 2026-03-28.
+    final saturday = DateTime(2026, 3, 28);
+    final at = DoseScheduler.slot(saturday, 1410);
+    if (at.day == saturday.day) return markTestSkipped('no gap at 23:30 in this zone');
+    const satMed = Medication(id: 1, name: 'A', timesOfDay: [1410], daysOfWeek: {6});
+
+    expect(satMed.coversSlot(at), isTrue);
+  });
 }
