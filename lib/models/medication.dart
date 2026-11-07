@@ -10,6 +10,7 @@ class Medication {
     required this.daysOfWeek,
     this.active = true,
     this.notes = '',
+    this.deleted = false,
   });
 
   final int? id;
@@ -24,6 +25,11 @@ class Medication {
 
   final bool active;
   final String notes;
+
+  /// Soft delete: the row stays so its dose history survives. `deleteMedication`
+  /// sets this instead of removing the row -- a hard delete cascaded and took the
+  /// whole history with it, while the confirm dialog promised it was kept.
+  final bool deleted;
 
   static const everyDay = {1, 2, 3, 4, 5, 6, 7};
 
@@ -50,6 +56,7 @@ class Medication {
     Set<int>? daysOfWeek,
     bool? active,
     String? notes,
+    bool? deleted,
   }) =>
       Medication(
         id: id ?? this.id,
@@ -59,6 +66,7 @@ class Medication {
         daysOfWeek: daysOfWeek ?? this.daysOfWeek,
         active: active ?? this.active,
         notes: notes ?? this.notes,
+        deleted: deleted ?? this.deleted,
       );
 
   Map<String, Object?> toRow() => {
@@ -69,6 +77,7 @@ class Medication {
         'days_of_week': daysOfWeek.join(','),
         'active': active ? 1 : 0,
         'notes': notes,
+        'deleted': deleted ? 1 : 0,
       };
 
   static Medication fromRow(Map<String, Object?> row) => Medication(
@@ -79,6 +88,8 @@ class Medication {
         daysOfWeek: _parseInts(row['days_of_week'] as String?).toSet(),
         active: (row['active'] as int? ?? 1) == 1,
         notes: (row['notes'] as String?) ?? '',
+        // `?? 0` so rows from before the column existed read as not deleted.
+        deleted: (row['deleted'] as int? ?? 0) == 1,
       );
 
   static Iterable<int> _parseInts(String? raw) =>

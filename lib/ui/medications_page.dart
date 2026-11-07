@@ -64,6 +64,10 @@ class MedicationsPageState extends State<MedicationsPage> {
 
     await widget.scheduler.cancelFutureAlarmsFor(med.id!);
     await DoseDatabase.instance.deleteMedication(med.id!);
+    // Reconcile right away: the deleted med now looks missing to the orphan pass,
+    // which cancels and deletes its still-pending future doses. Past doses keep
+    // their row -- the soft delete keeps the history the dialog promises.
+    await widget.scheduler.sync();
     await refresh();
     widget.onChanged?.call();
   }

@@ -88,8 +88,13 @@ class DoseScheduler {
   /// once the alarm stops -- keep a notification up for them until they're marked taken
   /// or skipped, or the user swipes it away.
   Future<void> _updateOutstandingNotification(DateTime now) async {
+    // Deleted meds are left out: their missed doses stay in the history, but the
+    // Today screen hides them, so a notification about them could never be cleared.
+    final meds = {for (final m in await _db.medications()) m.id: m};
     final overdue = undiscardedMissed(
-      await _db.pendingDosesBefore(now),
+      (await _db.pendingDosesBefore(now))
+          .where((d) => meds.containsKey(d.medicationId))
+          .toList(),
       now,
       await AlarmBridge.outstandingDismissedThrough(),
     );
@@ -99,7 +104,6 @@ class DoseScheduler {
       return;
     }
 
-    final meds = {for (final m in await _db.medications()) m.id: m};
     final names = overdue
         .map((d) => meds[d.medicationId]?.name)
         .whereType<String>()

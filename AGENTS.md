@@ -19,6 +19,10 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-07: deleting a medication is a **soft delete** (`medications.deleted`, DB v3) -- a hard
+DELETE cascaded through `doses` and destroyed the whole history the confirm dialog promised to
+keep; the row stays, flagged `deleted = 1` + `active = 0`, hidden from user-facing lists.
+
 2026-11-06: doses due at the same moment now share one alarm screen that lists them all,
 and Taken/Snooze applies to each (before, only the latest dose got a screen). Tested on the
 emulator with two meds at the same minute. The Android 12 fallback from PR #24 is still
