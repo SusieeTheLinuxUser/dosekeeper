@@ -205,6 +205,9 @@ class AlarmService : Service() {
         const val CHANNEL_ID = "dose_alarms"
         private const val FALLBACK_CHANNEL_ID = "dose_alarms_fallback"
         const val NOTIFICATION_ID = 4242
+        // Its own id, not the service's: stopping the service removes whatever sits under
+        // NOTIFICATION_ID, which took a still-unanswered fallback dose with it.
+        private const val FALLBACK_NOTIFICATION_ID = 4244
         private const val RING_TIMEOUT_MS = 5 * 60 * 1000L
         private const val RAMP_START_VOLUME = 0.1f
         private const val RAMP_STEPS = 30
@@ -317,8 +320,8 @@ class AlarmService : Service() {
             val n = buildNotification(context, doses, ringOnOpen = true, channel = FALLBACK_CHANNEL_ID)
             n.extras.putAll(dosesBundle(doses)) // see fallbackDoses
             n.flags = n.flags or Notification.FLAG_INSISTENT // repeat the sound until it's dealt with
-            // Same id as the service's: when the alarm screen starts the ringing, that replaces this.
-            nm.notify(NOTIFICATION_ID, n)
+            // The alarm screen takes its doses off this once it has started them ringing.
+            nm.notify(FALLBACK_NOTIFICATION_ID, n)
         }
 
         /**
@@ -331,7 +334,7 @@ class AlarmService : Service() {
         private var fallback: MutableList<Due>? = null
 
         private fun fallbackDoses(nm: NotificationManager): MutableList<Due> =
-            fallback ?: nm.activeNotifications.firstOrNull { it.id == NOTIFICATION_ID }
+            fallback ?: nm.activeNotifications.firstOrNull { it.id == FALLBACK_NOTIFICATION_ID }
                 ?.let { dosesFrom(it.notification.extras) }.orEmpty().toMutableList()
                 .also { fallback = it }
 
@@ -344,19 +347,24 @@ class AlarmService : Service() {
                     putExtra(EXTRA_DOSE_IDS, longArrayOf(doseId))
                 })
             }
+            dropFallback(context, longArrayOf(doseId))
+        }
+
+        /**
+         * Takes [doseIds] off the fallback notification: answered, or now ringing in the
+         * service. One notification for every dose, so the rest stay on it, still ringing.
+         */
+        fun dropFallback(context: Context, doseIds: LongArray) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            // One notification for every dose: take this one off it, the rest keep ringing.
             val listed = fallbackDoses(nm)
-            if (!listed.removeAll { it.id == doseId }) return
-            if (listed.isEmpty()) nm.cancel(NOTIFICATION_ID) else postFallback(context, listed.toList())
+            if (!listed.removeAll { it.id in doseIds }) return
+            if (listed.isEmpty()) nm.cancel(FALLBACK_NOTIFICATION_ID) else postFallback(context, listed.toList())
         }
 
         /** [doseIds]: the doses the alarm screen dealt with; one that came due since keeps ringing. */
         fun stop(context: Context, doseIds: LongArray) {
             // Posted by notifyInstead when the service never started, so stopping it won't clear it.
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            fallbackDoses(nm).removeAll { it.id in doseIds }
-            nm.cancel(NOTIFICATION_ID)
+            dropFallback(context, doseIds)
             context.startService(Intent(context, AlarmService::class.java).apply {
                 action = ACTION_STOP
                 putExtra(EXTRA_DOSE_IDS, doseIds)

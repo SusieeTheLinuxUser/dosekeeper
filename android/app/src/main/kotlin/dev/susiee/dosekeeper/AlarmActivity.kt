@@ -45,6 +45,8 @@ class AlarmActivity : Activity() {
                         },
                     )
                 }
+                // Ringing in the service now: the fallback's own sound must stop for them.
+                AlarmService.dropFallback(this, doses.map { it.id }.toLongArray())
             }.onFailure {
                 // The insistent notification keeps ringing until Taken/Snooze, so this isn't silent.
                 android.util.Log.e("DoseKeeper/Activity", "couldn't start ringing from the alarm screen", it)
