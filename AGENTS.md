@@ -340,6 +340,13 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   ```
   Also check that the Settings button lands on a sensible screen on ColorOS.
 
+- **Adjustable snooze length** (`SnoozePrefs.kt`, Info page "Snooze length") — the alarm
+  screen's Snooze waits 5/10/15/30 minutes (default 10, chosen on the Info page). Stored
+  in its own native SharedPreferences file (`dosekeeper_settings`), not Dart or the DB,
+  because `AlarmActivity` snoozes while Dart may not be running; unknown values fall back
+  to 10 there. The alarm button label ("SNOOZE N MIN") shows the chosen length. Not in
+  the backup format on purpose: it's a device preference, not dose data.
+
 - **Info page** (`lib/ui/info_page.dart`, app-bar info icon) -- version as Android reports
   it, so it matches App info. Debug builds get a `-debug` suffix (`versionNameSuffix`). The
   source link hands off to the browser with an intent, so release builds still need no
@@ -405,7 +412,6 @@ Quality of life:
 - **"As-needed" (PRN) medications** — no fixed schedule, just a manual log button for
   ad hoc doses. Common for real regimens (e.g. pain relief) that the current
   fixed-time/fixed-weekday model can't represent at all.
-- **Adjustable snooze length** — hardcoded to 10 minutes in `AlarmActivity.SNOOZE_MS`.
 - **Home-screen widget** showing the next dose at a glance.
 
 Data ownership — fits "no account, no server":

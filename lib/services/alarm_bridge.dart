@@ -86,6 +86,19 @@ class AlarmBridge {
   static Future<String> appVersion() async =>
       await _channel.invokeMethod<String>('appVersion') ?? 'Unknown';
 
+  /// Snooze length in minutes. Stored natively because the native alarm screen
+  /// snoozes while Dart may not be running; unknown values fall back to 10 there.
+  static Future<int> getSnoozeMinutes() async =>
+      await _channel.invokeMethod<int>('getSnoozeMinutes') ?? 10;
+
+  /// The lengths the user can pick; must match SnoozePrefs.ALLOWED natively.
+  static const snoozeChoices = [5, 10, 15, 30];
+
+  /// Sets the snooze length in minutes. Anything outside [snoozeChoices] is
+  /// ignored natively and leaves the previous value alone.
+  static Future<void> setSnoozeMinutes(int minutes) =>
+      _channel.invokeMethod('setSnoozeMinutes', {'minutes': minutes});
+
   /// Opens [url] in the browser. The app itself still makes no network requests.
   /// False if nothing on the phone can open it.
   static Future<bool> openUrl(String url) async =>

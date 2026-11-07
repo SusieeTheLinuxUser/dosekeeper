@@ -19,6 +19,9 @@ class AlarmActivity : Activity() {
 
     private var doses: List<AlarmService.Due> = emptyList()
 
+    /** Set in onCreate from SnoozePrefs; the label and the snooze use the same value. */
+    private var snoozeMinutes = 10
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockscreen()
@@ -69,8 +72,11 @@ class AlarmActivity : Activity() {
         findViewById<android.widget.Button>(R.id.alarm_taken).setOnClickListener {
             finishWith(PendingAction.TAKEN)
         }
-        findViewById<android.widget.Button>(R.id.alarm_snooze).setOnClickListener {
-            finishWith(PendingAction.SNOOZE)
+        findViewById<android.widget.Button>(R.id.alarm_snooze).apply {
+            // Read here, once, so the label and the actual snooze length can't disagree.
+            snoozeMinutes = SnoozePrefs.snoozeMinutes(this@AlarmActivity)
+            text = "SNOOZE $snoozeMinutes MIN"
+            setOnClickListener { finishWith(PendingAction.SNOOZE) }
         }
     }
 
@@ -99,12 +105,13 @@ class AlarmActivity : Activity() {
     private fun finishWith(action: PendingAction) {
         val now = System.currentTimeMillis()
         if (action == PendingAction.SNOOZE) {
+            val snoozeMs = snoozeMinutes * 60 * 1000L
             val snoozed = doses.filter {
-                AlarmScheduler.schedule(this, it.id, now + SNOOZE_MS, it.name, it.dosage)
+                AlarmScheduler.schedule(this, it.id, now + snoozeMs, it.name, it.dosage)
             }
             // Android refused a snooze alarm. Stopping now would mean that dose never rings
             // again, so keep ringing and say so. Undo the snoozes that did arm: tapping Taken
-            // next would otherwise ring them again in 10 minutes.
+            // next would otherwise ring them again minutes from now.
             if (snoozed.size < doses.size) {
                 snoozed.forEach { AlarmScheduler.disarm(this, it.id) }
                 Toast.makeText(this, "Couldn't snooze. Take it now, or try again.", Toast.LENGTH_LONG).show()
@@ -130,8 +137,4 @@ class AlarmActivity : Activity() {
     }
 
     enum class PendingAction { TAKEN, SNOOZE }
-
-    companion object {
-        private const val SNOOZE_MS = 10 * 60 * 1000L
-    }
 }
