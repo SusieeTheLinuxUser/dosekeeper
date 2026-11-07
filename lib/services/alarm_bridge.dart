@@ -103,6 +103,15 @@ class AlarmBridge {
   static Future<void> setSnoozeMinutes(int minutes) =>
       _channel.invokeMethod('setSnoozeMinutes', {'minutes': minutes});
 
+  /// Whether the alarm starts quiet and steps up to full volume over 30 seconds.
+  /// Stored natively because AlarmService rings while Dart may not be running.
+  /// Default off: an alarm stays full volume unless the user chooses otherwise.
+  static Future<bool> getVolumeRamp() async =>
+      await _channel.invokeMethod<bool>('getVolumeRamp') ?? false;
+
+  static Future<void> setVolumeRamp(bool enabled) =>
+      _channel.invokeMethod('setVolumeRamp', {'enabled': enabled});
+
   /// Opens [url] in the browser. The app itself still makes no network requests.
   /// False if nothing on the phone can open it.
   static Future<bool> openUrl(String url) async =>

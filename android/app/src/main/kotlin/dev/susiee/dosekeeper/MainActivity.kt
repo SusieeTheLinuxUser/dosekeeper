@@ -222,6 +222,14 @@ class MainActivity : FlutterActivity() {
                         result.success(SnoozePrefs.snoozeMinutes(this))
                     }
 
+                    /** The volume-ramp switch; native, so AlarmService can ring without Dart. */
+                    "getVolumeRamp" -> result.success(SnoozePrefs.volumeRamp(this))
+
+                    "setVolumeRamp" -> {
+                        SnoozePrefs.setVolumeRamp(this, call.argument<Boolean>("enabled") == true)
+                        result.success(SnoozePrefs.volumeRamp(this))
+                    }
+
                     "openUrl" -> {
                         try {
                             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url"))))

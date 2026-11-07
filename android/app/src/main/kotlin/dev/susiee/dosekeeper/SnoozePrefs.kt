@@ -14,6 +14,7 @@ import android.content.Context
 object SnoozePrefs {
     private const val PREFS = "dosekeeper_settings"
     private const val KEY_SNOOZE_MINUTES = "snooze_minutes"
+    private const val KEY_VOLUME_RAMP = "volume_ramp"
 
     val ALLOWED = setOf(5, 10, 15, 30)
 
@@ -27,6 +28,19 @@ object SnoozePrefs {
         // Only the allowed choices are ever written, so the fallback above stays a fallback.
         if (minutes !in ALLOWED) return
         prefs(context).edit().putInt(KEY_SNOOZE_MINUTES, minutes).apply()
+    }
+
+    /**
+     * Whether the ring starts quiet and ramps to full volume. Default off: an alarm
+     * must stay full volume unless the user explicitly chooses otherwise. Read by
+     * AlarmService, which rings while Dart may not be running -- hence native, like
+     * the snooze length.
+     */
+    fun volumeRamp(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_VOLUME_RAMP, false)
+
+    fun setVolumeRamp(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_VOLUME_RAMP, enabled).apply()
     }
 
     private fun prefs(context: Context) =
