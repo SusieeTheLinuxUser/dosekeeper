@@ -180,28 +180,96 @@ object BackupStore {
     }
 
     /**
-     * Writes [content] as [name], replacing that file if it exists. Opened with "wt"
-     * (truncate): plain "w" does not truncate on every provider, and a shorter backup
-     * written over a longer one would leave trailing garbage -- a corrupt backup that
-     * only shows up on the day it's needed.
+     * Writes [content] as [name], replacing that file if it exists -- crash-safe:
+     * the content goes to a fresh temp document first (`<day>.tmp.json`, which
+     * Backup.isBackupFileName does not match, so it is never listed or pruned), and
+     * today's existing file is deleted only once the temp is complete. The temp then
+     * takes its place by rename (or copy where a provider cannot rename). Dying
+     * before the delete leaves the old file untouched; dying after it leaves the
+     * complete temp, which the next write installs or cleans up. A fresh empty
+     * document has no stale bytes to truncate, so the old "wt"-or-recreate dance
+     * (and its delete-first data-loss window) is gone entirely.
      */
+    // Each channel call runs on its own thread; overlapping writes would interleave
+    // their create/delete/rename steps, so one write runs at a time.
+    @Synchronized
     fun write(context: Context, name: String, content: String) {
         val tree = requireFolder(context)
         val bytes = content.toByteArray(Charsets.UTF_8)
-        val existing = find(context, tree, name)
-        val written = existing != null && runCatching { writeTo(context, existing, "wt", bytes) }.isSuccess
-        if (!written) {
-            // No file yet, or this provider refuses "wt": start from a fresh, empty file.
-            existing?.let { DocumentsContract.deleteDocument(context.contentResolver, it) }
-            val parent = DocumentsContract.buildDocumentUriUsingTree(
-                tree,
-                DocumentsContract.getTreeDocumentId(tree),
-            )
-            val created = DocumentsContract.createDocument(context.contentResolver, parent, MIME_JSON, name)
-                ?: throw FileNotFoundException("Could not create $name")
-            writeTo(context, created, "w", bytes)
+        // Ends in .json on purpose: providers append the MIME type's extension to a name
+        // that lacks it, so "x.json.tmp" would be created as "x.json.tmp.json" and the
+        // leftover check below would never find it.
+        val tmpName = name.removeSuffix(".json") + ".tmp.json"
+        val parent = DocumentsContract.buildDocumentUriUsingTree(
+            tree,
+            DocumentsContract.getTreeDocumentId(tree),
+        )
+
+        // A leftover temp means a previous write died. It replaces today's file only
+        // when it is complete (parses) and today's file is missing or partial (a
+        // death mid-copy in install); otherwise it is junk.
+        find(context, tree, tmpName)?.let { leftover ->
+            val dest = find(context, tree, name)
+            if (!parses(context, leftover) || (dest != null && parses(context, dest))) {
+                deleteOrThrow(context, leftover, tmpName)
+            } else {
+                dest?.let { deleteOrThrow(context, it, name) }
+                if (!install(context, parent, leftover, name)) {
+                    // Keep the temp: it is the only complete copy of that backup.
+                    throw FileNotFoundException("An interrupted backup of $name could not be recovered")
+                }
+            }
+        }
+
+        val tmp = DocumentsContract.createDocument(context.contentResolver, parent, MIME_JSON, tmpName)
+            ?: throw FileNotFoundException("Could not create $tmpName")
+        try {
+            writeTo(context, tmp, "w", bytes)
+        } catch (e: Exception) {
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, tmp) }
+            throw e
+        }
+        // The new content is complete on storage; only now may today's file go away.
+        find(context, tree, name)?.let { deleteOrThrow(context, it, name) }
+        if (!install(context, parent, tmp, name)) {
+            throw FileNotFoundException("Could not move $tmpName into place; it still holds the complete backup")
         }
         prefs(context).edit().putLong(KEY_LAST_BACKUP_AT, System.currentTimeMillis()).apply()
+    }
+
+    /**
+     * Puts a complete temp document at [name] (which no file currently holds):
+     * rename, or -- for providers without rename -- copy the bytes into a fresh
+     * document and delete the temp. On failure nothing is left under [name].
+     */
+    private fun install(context: Context, parent: Uri, tmp: Uri, name: String): Boolean {
+        runCatching { DocumentsContract.renameDocument(context.contentResolver, tmp, name) }
+            .onSuccess { if (it != null) return true }
+        val created = runCatching {
+            DocumentsContract.createDocument(context.contentResolver, parent, MIME_JSON, name)
+        }.getOrNull() ?: return false
+        val copied = runCatching {
+            val bytes = context.contentResolver.openInputStream(tmp)?.use { it.readBytes() }
+                ?: throw FileNotFoundException("Could not read the temp backup")
+            writeTo(context, created, "w", bytes)
+        }.isSuccess
+        if (!copied) {
+            // Never leave a partial file under a real backup name.
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, created) }
+            return false
+        }
+        // Best effort: a surviving temp is cleaned up as stale on the next write.
+        runCatching { DocumentsContract.deleteDocument(context.contentResolver, tmp) }
+        return true
+    }
+
+    private fun parses(context: Context, uri: Uri) =
+        runCatching { org.json.JSONObject(readUri(context, uri)) }.isSuccess
+
+    private fun deleteOrThrow(context: Context, uri: Uri, name: String) {
+        if (!DocumentsContract.deleteDocument(context.contentResolver, uri)) {
+            throw FileNotFoundException("Could not remove $name")
+        }
     }
 
     private fun writeTo(context: Context, doc: Uri, mode: String, bytes: ByteArray) {
