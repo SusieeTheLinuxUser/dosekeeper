@@ -287,7 +287,11 @@ class AlarmService : Service() {
             // Two doses due together each land here. Keep the ones already listed: posting
             // just this one replaced them, and an earlier dose (its alarm already fired and
             // forgotten) then never showed or rang.
-            postFallback(context, fallbackDoses(nm).filter { it.id != doseId } + Due(doseId, medName, dosage))
+            val doses = fallbackDoses(nm).apply {
+                removeAll { it.id == doseId }
+                add(Due(doseId, medName, dosage))
+            }
+            postFallback(context, doses.toList())
         }
 
         private fun postFallback(context: Context, doses: List<Due>) {
@@ -317,10 +321,19 @@ class AlarmService : Service() {
             nm.notify(NOTIFICATION_ID, n)
         }
 
-        /** The doses the fallback notification lists; none if it isn't showing. */
-        private fun fallbackDoses(nm: NotificationManager): List<Due> =
-            nm.activeNotifications.firstOrNull { it.id == NOTIFICATION_ID }
-                ?.let { dosesFrom(it.notification.extras) }.orEmpty()
+        /**
+         * The doses the fallback notification lists. Kept here, not only read back from the
+         * notification: notify() is asynchronous, so a dose posted a moment ago (two doses
+         * due together) may not be listed there yet. Read from the notification only when
+         * this process hasn't posted one yet (it may have been restarted since).
+         * Main thread only: receivers, the alarm screen and the method channel all run there.
+         */
+        private var fallback: MutableList<Due>? = null
+
+        private fun fallbackDoses(nm: NotificationManager): MutableList<Due> =
+            fallback ?: nm.activeNotifications.firstOrNull { it.id == NOTIFICATION_ID }
+                ?.let { dosesFrom(it.notification.extras) }.orEmpty().toMutableList()
+                .also { fallback = it }
 
         /** The dose was dealt with elsewhere (Today screen): stop it ringing, service or fallback. */
         fun cancelFallback(context: Context, doseId: Long) {
@@ -334,15 +347,16 @@ class AlarmService : Service() {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             // One notification for every dose: take this one off it, the rest keep ringing.
             val listed = fallbackDoses(nm)
-            if (listed.none { it.id == doseId }) return
-            val rest = listed.filter { it.id != doseId }
-            if (rest.isEmpty()) nm.cancel(NOTIFICATION_ID) else postFallback(context, rest)
+            if (!listed.removeAll { it.id == doseId }) return
+            if (listed.isEmpty()) nm.cancel(NOTIFICATION_ID) else postFallback(context, listed.toList())
         }
 
         /** [doseIds]: the doses the alarm screen dealt with; one that came due since keeps ringing. */
         fun stop(context: Context, doseIds: LongArray) {
             // Posted by notifyInstead when the service never started, so stopping it won't clear it.
-            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            fallbackDoses(nm).removeAll { it.id in doseIds }
+            nm.cancel(NOTIFICATION_ID)
             context.startService(Intent(context, AlarmService::class.java).apply {
                 action = ACTION_STOP
                 putExtra(EXTRA_DOSE_IDS, doseIds)
