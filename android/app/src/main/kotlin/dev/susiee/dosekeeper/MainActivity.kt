@@ -118,6 +118,30 @@ class MainActivity : FlutterActivity() {
                      * lockscreen takeover never happens. Below 33 the permission does not exist
                      * and notifications are allowed by default.
                      */
+                    /**
+                     * Android 14+ made full-screen intents a special access the user (or the
+                     * OS, after a reinstall) can switch off. Then the alarm rings but never
+                     * takes over the lockscreen -- same silent failure as notifications off.
+                     */
+                    "canUseFullScreenIntent" -> result.success(
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+                            (getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                                .canUseFullScreenIntent(),
+                    )
+
+                    "openFullScreenIntentSettings" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            val pkg = Uri.parse("package:$packageName")
+                            try {
+                                startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).setData(pkg))
+                            } catch (e: ActivityNotFoundException) {
+                                // OEM builds may drop that screen; the app's own page still has the switch.
+                                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(pkg))
+                            }
+                        }
+                        result.success(true)
+                    }
+
                     "hasNotificationPermission" -> {
                         val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                             ContextCompat.checkSelfPermission(
