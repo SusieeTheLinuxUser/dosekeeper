@@ -610,8 +610,10 @@ done; what's next is judgment, not a fixed checklist:
   a stable release. The debug APK must be built **on the user's machine**: only its
   `~/.android/debug.keystore` matches the phone. A CI debug build has a different key and
   won't install, and the "fix" for that is the wipe.
-  How `dev-1.1.8` was made (2026-11-08): bump `version:` by PR and merge; fast-forward `dev`
-  to `master` (`git push origin origin/master:refs/heads/dev`); `flutter build apk --debug`;
+  How `dev-1.1.8` was made (2026-11-08): bump `version:` by PR and merge; `git fetch origin`;
+  `git checkout --detach origin/master` with a clean tree (so the APK is built from the commit
+  the tag points at); fast-forward `dev` to it (`git push origin origin/master:refs/heads/dev`);
+  `flutter build apk --debug`;
   check the signer matches the previous dev APK (`apksigner verify --print-certs`, SHA-256
   `05cbd6a6…5fb4`); copy it to `dosekeeper-X.Y.Z-debug.apk`; `gh release create dev-X.Y.Z
   --prerelease --target <full master SHA>` with that file (a short SHA is rejected).
