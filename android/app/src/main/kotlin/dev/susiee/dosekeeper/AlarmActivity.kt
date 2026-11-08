@@ -29,8 +29,11 @@ class AlarmActivity : Activity() {
         super.onCreate(savedInstanceState)
         showOverLockscreen()
 
-        doses = AlarmService.dosesFrom(intent.extras)
+        // Not the doses answered since: Android rebuilds a screen killed in the background
+        // (process death) from its first intent, which still lists them.
+        doses = AlarmService.dosesFrom(intent.extras).filterNot { isAnswered(this, it.id) }
         shown = this
+        if (doses.isEmpty()) { finish(); return }
 
         setContentView(R.layout.activity_alarm)
 
@@ -132,6 +135,8 @@ class AlarmActivity : Activity() {
      * Flutter engine may not be running at all when the alarm fires.
      */
     private fun finishWith(action: PendingAction) {
+        // Last check: Snooze must never re-arm a dose that was answered elsewhere.
+        doses = doses.filterNot { isAnswered(this, it.id) }
         val now = System.currentTimeMillis()
         if (action == PendingAction.SNOOZE) {
             val snoozeMs = snoozeMinutes * 60 * 1000L
@@ -175,9 +180,38 @@ class AlarmActivity : Activity() {
          */
         private var shown: AlarmActivity? = null
 
-        /** Called from AlarmService.cancelFallback: every "answered elsewhere" path ends there. */
-        fun dropDoses(doseIds: LongArray) {
+        /**
+         * Called from AlarmService.cancelFallback: every "answered elsewhere" path ends there.
+         * Also saved, for a screen Android rebuilds after killing the app in the background.
+         */
+        fun dropDoses(context: Context, doseIds: LongArray) {
+            val now = System.currentTimeMillis()
+            val edit = answered(context).edit()
+            // ponytail: pruned by age, so the file stays small; a screen left in the background
+            // longer than this could offer Snooze for an answered dose again (an extra ring only).
+            answered(context).all.forEach { (k, v) ->
+                if ((v as? Long ?: 0L) < now - ANSWERED_KEEP_MS) edit.remove(k)
+            }
+            doseIds.forEach { edit.putLong(it.toString(), now) }
+            edit.apply()
             shown?.drop(doseIds)
         }
+
+        /**
+         * The dose's alarm fired or is ringing (re-armed, a new dose reusing the id after a
+         * restore, a ring Android restarted): it's due, so no screen may hide it.
+         */
+        fun dueAgain(context: Context, doseId: Long) {
+            answered(context).edit().remove(doseId.toString()).apply()
+        }
+
+        private fun isAnswered(context: Context, doseId: Long) =
+            answered(context).contains(doseId.toString())
+
+        /** Dose id -> when it was answered elsewhere. Its own file: Dart drains BootReceiver.PREFS. */
+        private fun answered(context: Context) =
+            context.getSharedPreferences("dosekeeper_answered_doses", Context.MODE_PRIVATE)
+
+        private const val ANSWERED_KEEP_MS = 2 * 24 * 60 * 60 * 1000L
     }
 }

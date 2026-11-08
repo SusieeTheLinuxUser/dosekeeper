@@ -65,6 +65,9 @@ class AlarmService : Service() {
         // alarm screen shows both: it used to show only the latest, and the other dose
         // never got a screen of its own. Without releasing the previous ring's
         // player/vibrator/wakelock first, the old MediaPlayer would keep looping, orphaned.
+        // Ringing means due, whatever was answered before (e.g. a ring Android brings back
+        // after killing the app): a screen that hid it would leave this ring unstoppable.
+        AlarmActivity.dueAgain(this, doseId)
         ringing[doseId] = Due(doseId, medName, dosage)
         releaseRingingResources()
         acquireWakeLock()
@@ -349,7 +352,7 @@ class AlarmService : Service() {
             }
             dropFallback(context, longArrayOf(doseId))
             // And off an alarm screen that's still open for it, or Snooze there rings it again.
-            AlarmActivity.dropDoses(longArrayOf(doseId))
+            AlarmActivity.dropDoses(context, longArrayOf(doseId))
         }
 
         /**

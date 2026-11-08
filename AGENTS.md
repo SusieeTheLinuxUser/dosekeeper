@@ -26,7 +26,11 @@ screen stayed open behind, and Snooze there re-armed alarms for taken doses (the
 Taken/Skip, restore, deleting a med) ends in `AlarmScheduler.cancel` ->
 `AlarmService.cancelFallback`, which now also calls `AlarmActivity.dropDoses`. The open
 screen (`AlarmActivity.shown`, at most one: `singleInstance`) takes them off its list, so
-Taken/Snooze there only touch doses still listed. Build-checked only. **Manual check still
+Taken/Snooze there only touch doses still listed. The answered ids are also saved
+(prefs file `dosekeeper_answered_doses`, kept 2 days), because Android rebuilds a screen it
+killed in the background from its first intent; `AlarmReceiver` and `AlarmService.startRinging`
+clear an id again whenever it fires or rings, so a ringing dose can never be hidden from the
+screen that stops it. Build-checked only. **Manual check still
 to do** (emulator or phone): two meds at the same minute, wait for the alarm screen listing
 both, press Home, mark one Taken on Today: the screen lists only the other. Mark that one
 too: the screen is gone (not in `adb shell dumpsys activity activities | grep AlarmActivity`),
