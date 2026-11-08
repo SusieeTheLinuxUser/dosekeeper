@@ -19,6 +19,32 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-08: **the Android 12 fallback (PR #24 + #37) passed on an Android 12 emulator.**
+Two doses at the same minute: one fallback notification listing both, its alarm screen
+listing both and ringing (an alarm-stream player in `dumpsys audio`), one marked Taken on
+Today left the other listed and ringing, and answering both stopped everything. The CodeRabbit
+case passed too: dose C's alarm screen open, dose D due minutes later (the service then
+starts directly, since the app is in the foreground), Taken on C left D listed and ringing.
+No app errors in logcat. Not yet seen on a real Android 12 phone.
+Known, not fixed: after both doses were answered on **Today**, C's alarm screen stayed open
+behind (stale). Snooze there would re-arm alarms for doses already taken. Untested.
+How to repeat it (about 30 minutes):
+- AVD `dosekeeper-a12` (`system-images;android-31;google_apis;x86_64`, pixel_5). Open it from
+  T3's Device panel; it shows up as `emulator-5556` next to `dosekeeper-test` (5554), so put
+  `-s emulator-5556` on every adb command.
+- `flutter build apk --debug`, then `adb -s emulator-5556 install -r ...app-debug.apk`.
+  Android 12 has no `POST_NOTIFICATIONS` permission, so there's nothing to grant.
+- Turn the fallback on: `adb -s emulator-5556 shell am start -a
+  android.settings.REQUEST_SCHEDULE_EXACT_ALARM -d package:dev.susiee.dosekeeper` and
+  switch it off (this kills the app).
+- Add the meds a few minutes ahead, then press Home: with the app in the foreground Android
+  lets the service start, so the fallback never shows. The inexact alarm fires at the
+  **end** of its window (about 0.75 x the time left when armed; `dumpsys alarm` shows it as
+  `window=`), so a dose set 4 minutes ahead rang about 3 minutes late.
+- The receiver logs `can't start the ringing service from the background` when the
+  fallback is used. Check the notification with
+  `dumpsys notification --noredact | grep android.title`.
+
 2026-11-07 (review of everything since `dev-1.1.7`): the Android 12 fallback notification
 (`AlarmService.notifyInstead`) now lists **every** dose due at once. It used one shared id,
 so a second dose replaced the first, whose alarm had already fired and been forgotten: that
@@ -26,8 +52,8 @@ dose never showed or rang. Its alarm screen now starts ringing for each listed d
 `cancelFallback`/`stop` take only the handled doses off. The fallback has its own
 notification id (4244), separate from the ringing service's (4242): stopping the service
 removes whatever sits under its id, which used to take an unanswered fallback dose with it.
-The list is kept in memory too, since `notify()` is asynchronous. Build-checked only, like the rest of the
-fallback: no Android 12 device or emulator here.
+The list is kept in memory too, since `notify()` is asynchronous. **Tested on an Android 12
+emulator on 2026-11-08** (see the entry above this one).
 
 2026-11-07: the backup folder pick is **two-phase** (issue #30) -- a picked folder is
 pending until the "restore or keep?" question is answered, so an unanswered pick can no
@@ -39,8 +65,8 @@ keep; the row stays, flagged `deleted = 1` + `active = 0`, hidden from user-faci
 
 2026-11-06: doses due at the same moment now share one alarm screen that lists them all,
 and Taken/Snooze applies to each (before, only the latest dose got a screen). Tested on the
-emulator with two meds at the same minute. The Android 12 fallback from PR #24 is still
-untested on a device.
+emulator with two meds at the same minute. The Android 12 fallback from PR #24 was tested
+on an Android 12 emulator on 2026-11-08 (still not on a real Android 12 phone).
 
 v1.1.7 was merged to `master` (PR #22) but has no `v1.1.7` tag or stable release yet: the
 user may release it later. `1.1.7-debug` is on the phone, with the Google backup switch off.
