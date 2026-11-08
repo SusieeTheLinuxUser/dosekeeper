@@ -27,7 +27,8 @@ Taken/Skip, restore, deleting a med) ends in `AlarmScheduler.cancel` ->
 `AlarmService.cancelFallback`, which now also calls `AlarmActivity.dropDoses`. The open
 screen (`AlarmActivity.shown`, at most one: `singleInstance`) takes them off its list, so
 Taken/Snooze there only touch doses still listed. The answered ids are also saved
-(prefs file `dosekeeper_answered_doses`, kept 2 days), because Android rebuilds a screen it
+(prefs file `dosekeeper_answered_doses`, kept 2 days; a rebuilt screen older than that closes
+itself), because Android rebuilds a screen it
 killed in the background from its first intent; `AlarmReceiver` and `AlarmService.startRinging`
 clear an id again whenever it fires or rings, so a ringing dose can never be hidden from the
 screen that stops it. Build-checked only. **Manual check still

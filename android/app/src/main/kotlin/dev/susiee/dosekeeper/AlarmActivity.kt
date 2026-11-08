@@ -22,6 +22,13 @@ class AlarmActivity : Activity() {
     /** Set in onCreate from SnoozePrefs; the label and the snooze use the same value. */
     private var snoozeMinutes = 10
 
+    private var openedAt = 0L
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putLong(KEY_OPENED_AT, openedAt)
+    }
+
     /** The dose name's size from the layout, read once (showDoses shrinks it for several). */
     private var nameTextPx = 0f
 
@@ -33,7 +40,12 @@ class AlarmActivity : Activity() {
         // (process death) from its first intent, which still lists them.
         doses = AlarmService.dosesFrom(intent.extras).filterNot { isAnswered(this, it.id) }
         shown = this
-        if (doses.isEmpty()) { finish(); return }
+        // Kept across rebuilds (saved state outlives the process): when this screen first opened.
+        openedAt = savedInstanceState?.getLong(KEY_OPENED_AT) ?: System.currentTimeMillis()
+        // Older than the answered list remembers: it can't tell which doses were answered,
+        // so close rather than let Snooze re-arm one. Its doses are long missed by then.
+        val tooOld = openedAt < System.currentTimeMillis() - ANSWERED_KEEP_MS
+        if (doses.isEmpty() || tooOld) { finish(); return }
 
         setContentView(R.layout.activity_alarm)
 
@@ -187,8 +199,8 @@ class AlarmActivity : Activity() {
         fun dropDoses(context: Context, doseIds: LongArray) {
             val now = System.currentTimeMillis()
             val edit = answered(context).edit()
-            // ponytail: pruned by age, so the file stays small; a screen left in the background
-            // longer than this could offer Snooze for an answered dose again (an extra ring only).
+            // Pruned by age, so the file stays small. A screen older than this closes itself
+            // when rebuilt (onCreate), so a pruned id can't come back through one.
             answered(context).all.forEach { (k, v) ->
                 if ((v as? Long ?: 0L) < now - ANSWERED_KEEP_MS) edit.remove(k)
             }
@@ -212,6 +224,7 @@ class AlarmActivity : Activity() {
         private fun answered(context: Context) =
             context.getSharedPreferences("dosekeeper_answered_doses", Context.MODE_PRIVATE)
 
+        private const val KEY_OPENED_AT = "opened_at"
         private const val ANSWERED_KEEP_MS = 2 * 24 * 60 * 60 * 1000L
     }
 }
