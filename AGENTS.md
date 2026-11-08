@@ -30,20 +30,22 @@ Known, not fixed: after both doses were answered on **Today**, C's alarm screen 
 behind (stale). Snooze there would re-arm alarms for doses already taken. Untested.
 How to repeat it (about 30 minutes):
 - AVD `dosekeeper-a12` (`system-images;android-31;google_apis;x86_64`, pixel_5). Open it from
-  T3's Device panel; it shows up as `emulator-5556` next to `dosekeeper-test` (5554), so put
-  `-s emulator-5556` on every adb command.
-- `flutter build apk --debug`, then `adb -s emulator-5556 install -r ...app-debug.apk`.
+  T3's Device panel. Its serial depends on launch order (it was `emulator-5556` here, with
+  `dosekeeper-test` on 5554), so find it with `adb devices -l` (or `adb -s <serial> emu avd
+  name`) and put `-s <serial>` on every adb command. `<serial>` below means that.
+- `flutter build apk --debug`, then `adb -s <serial> install -r build/app/outputs/flutter-apk/app-debug.apk`.
   Android 12 has no `POST_NOTIFICATIONS` permission, so there's nothing to grant.
-- Turn the fallback on: `adb -s emulator-5556 shell am start -a
+- Turn the fallback on: `adb -s <serial> shell am start -a
   android.settings.REQUEST_SCHEDULE_EXACT_ALARM -d package:dev.susiee.dosekeeper` and
   switch it off (this kills the app).
 - Add the meds a few minutes ahead, then press Home: with the app in the foreground Android
-  lets the service start, so the fallback never shows. The inexact alarm fires at the
-  **end** of its window (about 0.75 x the time left when armed; `dumpsys alarm` shows it as
-  `window=`), so a dose set 4 minutes ahead rang about 3 minutes late.
+  lets the service start, so the fallback never shows. The alarm is inexact: in this run it
+  fired at the **end** of its window (about 0.75 x the time left when armed; `adb -s <serial>
+  shell dumpsys alarm` shows it as `window=`), so a dose set 4 minutes ahead rang about 3
+  minutes late. Android doesn't promise that; another run may fire anywhere in the window.
 - The receiver logs `can't start the ringing service from the background` when the
   fallback is used. Check the notification with
-  `dumpsys notification --noredact | grep android.title`.
+  `adb -s <serial> shell dumpsys notification --noredact | grep android.title`.
 
 2026-11-07 (review of everything since `dev-1.1.7`): the Android 12 fallback notification
 (`AlarmService.notifyInstead`) now lists **every** dose due at once. It used one shared id,
