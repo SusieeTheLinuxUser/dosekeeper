@@ -22,11 +22,15 @@ class AlarmActivity : Activity() {
     /** Set in onCreate from SnoozePrefs; the label and the snooze use the same value. */
     private var snoozeMinutes = 10
 
+    /** The dose name's size from the layout, read once (showDoses shrinks it for several). */
+    private var nameTextPx = 0f
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockscreen()
 
         doses = AlarmService.dosesFrom(intent.extras)
+        shown = this
 
         setContentView(R.layout.activity_alarm)
 
@@ -53,19 +57,7 @@ class AlarmActivity : Activity() {
             }
         }
 
-        val one = doses.singleOrNull()
-        findViewById<android.widget.TextView>(R.id.alarm_med_name).apply {
-            if (one != null) {
-                text = one.name
-            } else { // several due at once: one line each, smaller so they fit
-                text = doses.joinToString("\n") { it.label }
-                textSize = 26f
-            }
-        }
-        findViewById<android.widget.TextView>(R.id.alarm_dosage).apply {
-            text = one?.dosage.orEmpty()
-            visibility = if (text.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
-        }
+        showDoses()
 
         findViewById<android.widget.Button>(R.id.alarm_taken).setOnClickListener {
             finishWith(PendingAction.TAKEN)
@@ -76,6 +68,45 @@ class AlarmActivity : Activity() {
             text = "SNOOZE $snoozeMinutes MIN"
             setOnClickListener { finishWith(PendingAction.SNOOZE) }
         }
+    }
+
+    /** Shows [doses]. Again after drop(): two to one goes back to the layout's text size. */
+    private fun showDoses() {
+        val one = doses.singleOrNull()
+        findViewById<android.widget.TextView>(R.id.alarm_med_name).apply {
+            if (nameTextPx == 0f) nameTextPx = textSize
+            if (one != null) {
+                text = one.name
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, nameTextPx)
+            } else { // several due at once: one line each, smaller so they fit
+                text = doses.joinToString("\n") { it.label }
+                textSize = 26f
+            }
+        }
+        findViewById<android.widget.TextView>(R.id.alarm_dosage).apply {
+            text = one?.dosage.orEmpty()
+            visibility = if (text.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
+        }
+    }
+
+    /**
+     * [doseIds] were answered elsewhere (Today, the missed-dose notification): take them
+     * off this screen, and close it once none are left. Left listed, Snooze here re-armed
+     * alarms for doses already taken, and they rang again minutes later.
+     */
+    private fun drop(doseIds: LongArray) {
+        val left = doses.filter { it.id !in doseIds }
+        if (left.size == doses.size) return
+        doses = left
+        if (left.isEmpty()) { finish(); return }
+        // So a recreated screen (e.g. after rotating) doesn't bring the answered doses back.
+        intent.putExtras(AlarmService.dosesBundle(left))
+        showDoses()
+    }
+
+    override fun onDestroy() {
+        if (shown === this) shown = null
+        super.onDestroy()
     }
 
     private fun showOverLockscreen() {
@@ -135,4 +166,18 @@ class AlarmActivity : Activity() {
     }
 
     enum class PendingAction { TAKEN, SNOOZE }
+
+    companion object {
+        /**
+         * The alarm screen that's open, if any (singleInstance: at most one). Main thread
+         * only, like everything that answers a dose. Cleared in onDestroy, so it never
+         * holds a closed screen.
+         */
+        private var shown: AlarmActivity? = null
+
+        /** Called from AlarmService.cancelFallback: every "answered elsewhere" path ends there. */
+        fun dropDoses(doseIds: LongArray) {
+            shown?.drop(doseIds)
+        }
+    }
 }

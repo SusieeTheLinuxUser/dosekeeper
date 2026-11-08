@@ -264,7 +264,7 @@ class AlarmService : Service() {
         }
 
         /** The doses as extras: the alarm screen's intent, and the fallback notification. */
-        private fun dosesBundle(doses: List<Due>) = Bundle().apply {
+        fun dosesBundle(doses: List<Due>) = Bundle().apply {
             putLongArray(EXTRA_DOSE_IDS, doses.map { it.id }.toLongArray())
             putStringArray(EXTRA_MED_NAMES, doses.map { it.name }.toTypedArray())
             putStringArray(EXTRA_DOSAGES, doses.map { it.dosage }.toTypedArray())
@@ -338,7 +338,7 @@ class AlarmService : Service() {
                 ?.let { dosesFrom(it.notification.extras) }.orEmpty().toMutableList()
                 .also { fallback = it }
 
-        /** The dose was dealt with elsewhere (Today screen): stop it ringing, service or fallback. */
+        /** The dose was dealt with elsewhere (Today, missed-dose notification): stop it ringing everywhere. */
         fun cancelFallback(context: Context, doseId: Long) {
             // Marked taken on Today while the service rings for it: without this it kept ringing.
             if (doseId in ringing) {
@@ -348,6 +348,8 @@ class AlarmService : Service() {
                 })
             }
             dropFallback(context, longArrayOf(doseId))
+            // And off an alarm screen that's still open for it, or Snooze there rings it again.
+            AlarmActivity.dropDoses(longArrayOf(doseId))
         }
 
         /**

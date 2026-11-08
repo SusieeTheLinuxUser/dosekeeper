@@ -19,6 +19,20 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-08: **an alarm screen drops doses answered elsewhere, and closes when none are left.**
+Found on the Android 12 emulator: after its doses were marked Taken on Today, the alarm
+screen stayed open behind, and Snooze there re-armed alarms for taken doses (they rang again
+~10 min later). Every "answered elsewhere" path (Today, the missed-dose notification's
+Taken/Skip, restore, deleting a med) ends in `AlarmScheduler.cancel` ->
+`AlarmService.cancelFallback`, which now also calls `AlarmActivity.dropDoses`. The open
+screen (`AlarmActivity.shown`, at most one: `singleInstance`) takes them off its list, so
+Taken/Snooze there only touch doses still listed. Build-checked only. **Manual check still
+to do** (emulator or phone): two meds at the same minute, wait for the alarm screen listing
+both, press Home, mark one Taken on Today: the screen lists only the other. Mark that one
+too: the screen is gone (not in `adb shell dumpsys activity activities | grep AlarmActivity`),
+and nothing rings 10 minutes later (`adb shell dumpsys alarm | grep dev.susiee.dosekeeper`
+shows no alarm for them).
+
 2026-11-07 (review of everything since `dev-1.1.7`): the Android 12 fallback notification
 (`AlarmService.notifyInstead`) now lists **every** dose due at once. It used one shared id,
 so a second dose replaced the first, whose alarm had already fired and been forgotten: that
