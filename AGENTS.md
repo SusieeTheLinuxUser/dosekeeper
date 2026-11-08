@@ -19,6 +19,25 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-08: **an alarm screen drops doses answered elsewhere, and closes when none are left.**
+Found on the Android 12 emulator: after its doses were marked Taken on Today, the alarm
+screen stayed open behind, and Snooze there re-armed alarms for taken doses (they rang again
+~10 min later). Every "answered elsewhere" path (Today, the missed-dose notification's
+Taken/Skip, restore, deleting a med) ends in `AlarmScheduler.cancel` ->
+`AlarmService.cancelFallback`, which now also calls `AlarmActivity.dropDoses`. The open
+screen (`AlarmActivity.shown`, at most one: `singleInstance`) takes them off its list, so
+Taken/Snooze there only touch doses still listed. The answered ids are also saved
+(prefs file `dosekeeper_answered_doses`, kept 2 days; a rebuilt screen older than that closes
+itself), because Android rebuilds a screen it
+killed in the background from its first intent; `AlarmReceiver` and `AlarmService.startRinging`
+clear an id again whenever it fires or rings, so a ringing dose can never be hidden from the
+screen that stops it. Build-checked only. **Manual check still
+to do** (emulator or phone): two meds at the same minute, wait for the alarm screen listing
+both, press Home, mark one Taken on Today: the screen lists only the other. Mark that one
+too: the screen is gone (not in `adb shell dumpsys activity activities | grep AlarmActivity`),
+and nothing rings 10 minutes later (`adb shell dumpsys alarm | grep dev.susiee.dosekeeper`
+shows no alarm for them).
+
 2026-11-08: **the Android 12 fallback (PR #24 + #37) passed on an Android 12 emulator.**
 Two doses at the same minute: one fallback notification listing both, its alarm screen
 listing both and ringing (an alarm-stream player in `dumpsys audio`), one marked Taken on
@@ -26,9 +45,9 @@ Today left the other listed and ringing, and answering both stopped everything. 
 case passed too: dose C's alarm screen open, dose D due minutes later (the service then
 starts directly, since the app is in the foreground), Taken on C left D listed and ringing.
 No app errors in logcat. Not yet seen on a real Android 12 phone.
-Known, not fixed: after both doses were answered on **Today**, C's alarm screen stayed open
-behind (stale). Snooze there would re-arm alarms for doses already taken. Untested.
-How to repeat it (about 30 minutes):
+Found here: after both doses were answered on **Today**, C's alarm screen stayed open
+behind (stale), and Snooze there would re-arm alarms for taken doses. Fixed in PR #39 (entry above).
+How to repeat the test (about 30 minutes):
 - AVD `dosekeeper-a12` (`system-images;android-31;google_apis;x86_64`, pixel_5). Open it from
   T3's Device panel. Its serial depends on launch order (it was `emulator-5556` here, with
   `dosekeeper-test` on 5554), so find it with `adb devices -l` (or `adb -s <serial> emu avd

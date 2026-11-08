@@ -28,6 +28,7 @@ class AlarmReceiver : BroadcastReceiver() {
             .putLong("$KEY_FIRED_PREFIX$doseId", System.currentTimeMillis())
             .apply()
         AlarmScheduler.forget(context, doseId) // fired: nothing left to re-arm after a reboot
+        AlarmActivity.dueAgain(context, doseId) // due now: an alarm screen must list it
 
         val serviceIntent = Intent(context, AlarmService::class.java).apply {
             action = AlarmService.ACTION_RING

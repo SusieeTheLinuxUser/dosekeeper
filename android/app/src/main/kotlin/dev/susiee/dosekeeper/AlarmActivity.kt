@@ -22,11 +22,30 @@ class AlarmActivity : Activity() {
     /** Set in onCreate from SnoozePrefs; the label and the snooze use the same value. */
     private var snoozeMinutes = 10
 
+    private var openedAt = 0L
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putLong(KEY_OPENED_AT, openedAt)
+    }
+
+    /** The dose name's size from the layout, read once (showDoses shrinks it for several). */
+    private var nameTextPx = 0f
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockscreen()
 
-        doses = AlarmService.dosesFrom(intent.extras)
+        // Not the doses answered since: Android rebuilds a screen killed in the background
+        // (process death) from its first intent, which still lists them.
+        doses = AlarmService.dosesFrom(intent.extras).filterNot { isAnswered(this, it.id) }
+        shown = this
+        // Kept across rebuilds (saved state outlives the process): when this screen first opened.
+        openedAt = savedInstanceState?.getLong(KEY_OPENED_AT) ?: System.currentTimeMillis()
+        // Older than the answered list remembers: it can't tell which doses were answered,
+        // so close rather than let Snooze re-arm one. Its doses are long missed by then.
+        val tooOld = openedAt < System.currentTimeMillis() - ANSWERED_KEEP_MS
+        if (doses.isEmpty() || tooOld) { finish(); return }
 
         setContentView(R.layout.activity_alarm)
 
@@ -53,19 +72,7 @@ class AlarmActivity : Activity() {
             }
         }
 
-        val one = doses.singleOrNull()
-        findViewById<android.widget.TextView>(R.id.alarm_med_name).apply {
-            if (one != null) {
-                text = one.name
-            } else { // several due at once: one line each, smaller so they fit
-                text = doses.joinToString("\n") { it.label }
-                textSize = 26f
-            }
-        }
-        findViewById<android.widget.TextView>(R.id.alarm_dosage).apply {
-            text = one?.dosage.orEmpty()
-            visibility = if (text.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
-        }
+        showDoses()
 
         findViewById<android.widget.Button>(R.id.alarm_taken).setOnClickListener {
             finishWith(PendingAction.TAKEN)
@@ -76,6 +83,45 @@ class AlarmActivity : Activity() {
             text = "SNOOZE $snoozeMinutes MIN"
             setOnClickListener { finishWith(PendingAction.SNOOZE) }
         }
+    }
+
+    /** Shows [doses]. Again after drop(): two to one goes back to the layout's text size. */
+    private fun showDoses() {
+        val one = doses.singleOrNull()
+        findViewById<android.widget.TextView>(R.id.alarm_med_name).apply {
+            if (nameTextPx == 0f) nameTextPx = textSize
+            if (one != null) {
+                text = one.name
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, nameTextPx)
+            } else { // several due at once: one line each, smaller so they fit
+                text = doses.joinToString("\n") { it.label }
+                textSize = 26f
+            }
+        }
+        findViewById<android.widget.TextView>(R.id.alarm_dosage).apply {
+            text = one?.dosage.orEmpty()
+            visibility = if (text.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
+        }
+    }
+
+    /**
+     * [doseIds] were answered elsewhere (Today, the missed-dose notification): take them
+     * off this screen, and close it once none are left. Left listed, Snooze here re-armed
+     * alarms for doses already taken, and they rang again minutes later.
+     */
+    private fun drop(doseIds: LongArray) {
+        val left = doses.filter { it.id !in doseIds }
+        if (left.size == doses.size) return
+        doses = left
+        if (left.isEmpty()) { finish(); return }
+        // So a recreated screen (e.g. after rotating) doesn't bring the answered doses back.
+        intent.putExtras(AlarmService.dosesBundle(left))
+        showDoses()
+    }
+
+    override fun onDestroy() {
+        if (shown === this) shown = null
+        super.onDestroy()
     }
 
     private fun showOverLockscreen() {
@@ -101,6 +147,8 @@ class AlarmActivity : Activity() {
      * Flutter engine may not be running at all when the alarm fires.
      */
     private fun finishWith(action: PendingAction) {
+        // Last check: Snooze must never re-arm a dose that was answered elsewhere.
+        doses = doses.filterNot { isAnswered(this, it.id) }
         val now = System.currentTimeMillis()
         if (action == PendingAction.SNOOZE) {
             val snoozeMs = snoozeMinutes * 60 * 1000L
@@ -135,4 +183,48 @@ class AlarmActivity : Activity() {
     }
 
     enum class PendingAction { TAKEN, SNOOZE }
+
+    companion object {
+        /**
+         * The alarm screen that's open, if any (singleInstance: at most one). Main thread
+         * only, like everything that answers a dose. Cleared in onDestroy, so it never
+         * holds a closed screen.
+         */
+        private var shown: AlarmActivity? = null
+
+        /**
+         * Called from AlarmService.cancelFallback: every "answered elsewhere" path ends there.
+         * Also saved, for a screen Android rebuilds after killing the app in the background.
+         */
+        fun dropDoses(context: Context, doseIds: LongArray) {
+            val now = System.currentTimeMillis()
+            val edit = answered(context).edit()
+            // Pruned by age, so the file stays small. A screen older than this closes itself
+            // when rebuilt (onCreate), so a pruned id can't come back through one.
+            answered(context).all.forEach { (k, v) ->
+                if ((v as? Long ?: 0L) < now - ANSWERED_KEEP_MS) edit.remove(k)
+            }
+            doseIds.forEach { edit.putLong(it.toString(), now) }
+            edit.apply()
+            shown?.drop(doseIds)
+        }
+
+        /**
+         * The dose's alarm fired or is ringing (re-armed, a new dose reusing the id after a
+         * restore, a ring Android restarted): it's due, so no screen may hide it.
+         */
+        fun dueAgain(context: Context, doseId: Long) {
+            answered(context).edit().remove(doseId.toString()).apply()
+        }
+
+        private fun isAnswered(context: Context, doseId: Long) =
+            answered(context).contains(doseId.toString())
+
+        /** Dose id -> when it was answered elsewhere. Its own file: Dart drains BootReceiver.PREFS. */
+        private fun answered(context: Context) =
+            context.getSharedPreferences("dosekeeper_answered_doses", Context.MODE_PRIVATE)
+
+        private const val KEY_OPENED_AT = "opened_at"
+        private const val ANSWERED_KEEP_MS = 2 * 24 * 60 * 60 * 1000L
+    }
 }

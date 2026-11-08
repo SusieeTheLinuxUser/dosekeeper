@@ -65,6 +65,9 @@ class AlarmService : Service() {
         // alarm screen shows both: it used to show only the latest, and the other dose
         // never got a screen of its own. Without releasing the previous ring's
         // player/vibrator/wakelock first, the old MediaPlayer would keep looping, orphaned.
+        // Ringing means due, whatever was answered before (e.g. a ring Android brings back
+        // after killing the app): a screen that hid it would leave this ring unstoppable.
+        AlarmActivity.dueAgain(this, doseId)
         ringing[doseId] = Due(doseId, medName, dosage)
         releaseRingingResources()
         acquireWakeLock()
@@ -264,7 +267,7 @@ class AlarmService : Service() {
         }
 
         /** The doses as extras: the alarm screen's intent, and the fallback notification. */
-        private fun dosesBundle(doses: List<Due>) = Bundle().apply {
+        fun dosesBundle(doses: List<Due>) = Bundle().apply {
             putLongArray(EXTRA_DOSE_IDS, doses.map { it.id }.toLongArray())
             putStringArray(EXTRA_MED_NAMES, doses.map { it.name }.toTypedArray())
             putStringArray(EXTRA_DOSAGES, doses.map { it.dosage }.toTypedArray())
@@ -338,7 +341,7 @@ class AlarmService : Service() {
                 ?.let { dosesFrom(it.notification.extras) }.orEmpty().toMutableList()
                 .also { fallback = it }
 
-        /** The dose was dealt with elsewhere (Today screen): stop it ringing, service or fallback. */
+        /** The dose was dealt with elsewhere (Today, missed-dose notification): stop it ringing everywhere. */
         fun cancelFallback(context: Context, doseId: Long) {
             // Marked taken on Today while the service rings for it: without this it kept ringing.
             if (doseId in ringing) {
@@ -348,6 +351,8 @@ class AlarmService : Service() {
                 })
             }
             dropFallback(context, longArrayOf(doseId))
+            // And off an alarm screen that's still open for it, or Snooze there rings it again.
+            AlarmActivity.dropDoses(context, longArrayOf(doseId))
         }
 
         /**
