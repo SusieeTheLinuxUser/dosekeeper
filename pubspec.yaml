@@ -21,6 +21,9 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
   sqflite_common_ffi: ^2.3.0
+  # Stay on 2.x: 3.x has a native build step that also runs for the Android app build,
+  # making it depend on a download from GitHub (a 504 there failed CI). Tests only need this.
+  sqlite3: ^2.9.0
 
 flutter:
   uses-material-design: true
