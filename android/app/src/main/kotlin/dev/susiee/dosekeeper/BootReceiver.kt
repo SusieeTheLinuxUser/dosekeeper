@@ -26,7 +26,15 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_TIME_CHANGED,
             BackgroundSync.ACTION_DAILY_SYNC,
             -> Unit // alarms are still armed; only Dart's picture needs refreshing
-            else -> AlarmScheduler.rearmAll(context) // boot/replace: alarms are gone
+
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            "android.intent.action.QUICKBOOT_POWERON",
+            "com.htc.intent.action.QUICKBOOT_POWERON",
+            -> AlarmScheduler.rearmAll(context) // boot/replace: alarms are gone
+
+            // Exported, so any app can send this anything. Keep in step with the manifest.
+            else -> return
         }
         BackgroundSync.request(context, goAsync())
     }
