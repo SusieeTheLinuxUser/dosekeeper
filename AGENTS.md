@@ -27,7 +27,8 @@ Before, alarms were armed only 3 days ahead and only when the app was open, so t
 Kotlin. The horizon is still 3 days. Triggers: a dose alarm firing (`AlarmReceiver`, 3 s
 later so ringing comes first), boot / app update (`BootReceiver`, after its native
 `rearmAll`), `TIMEZONE_CHANGED` / `TIME_SET`, and a daily safety net (`setAndAllowWhileIdle`,
-for schedules with no alarm for days, e.g. weekly). The method-channel calls sync needs moved
+for schedules with no alarm for days, e.g. weekly). A firing dose alarm must not re-arm that net:
+its sync can die with the process, and a daily med would then push the net back forever. The method-channel calls sync needs moved
 to `AlarmChannel.kt`, shared with `MainActivity`. A time zone change works through the
 existing orphan cleanup: doses off the new wall clock are cancelled and re-created.
 **No `goAsync()` in `AlarmReceiver`, on purpose:** Android holds the app's next broadcast until

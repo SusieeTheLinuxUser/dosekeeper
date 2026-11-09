@@ -50,7 +50,6 @@ object BackgroundSync {
      */
     fun request(context: Context, pending: BroadcastReceiver.PendingResult? = null, delayMs: Long = 0) {
         val ctx = context.applicationContext
-        armSafetyNet(ctx) // first: nothing below may get a chance to fail before this
         if (pending != null) {
             pendings.add(pending)
             // TIME_SET/TIMEZONE_CHANGED are foreground broadcasts with a 10 s limit: never
@@ -139,6 +138,9 @@ object BackgroundSync {
      * a sync; inexact needs no permission, and is deliberately not setAlarmClock (that
      * would show the user a fake next alarm). Worst case Android stretches it to
      * ~42 h, still inside the 72 h horizon.
+     *
+     * Not re-armed by a firing dose alarm: its sync can be lost if the process dies
+     * once ringing stops, and a daily med would then push this back forever.
      */
     fun armSafetyNet(context: Context) {
         try {

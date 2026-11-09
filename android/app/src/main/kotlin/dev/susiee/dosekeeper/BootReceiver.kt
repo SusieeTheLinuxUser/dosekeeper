@@ -36,6 +36,7 @@ class BootReceiver : BroadcastReceiver() {
             // Exported, so any app can send this anything. Keep in step with the manifest.
             else -> return
         }
+        BackgroundSync.armSafetyNet(context) // first: nothing below may fail before this
         BackgroundSync.request(context, goAsync())
     }
 
