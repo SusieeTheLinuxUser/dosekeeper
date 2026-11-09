@@ -32,24 +32,14 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        BackgroundSync.armSafetyNet(this)
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
+                // The calls a background sync can make (AlarmChannel) work with just a
+                // context; only the rest below actually needs an activity.
+                if (AlarmChannel.handle(this, call, result)) return@setMethodCallHandler
                 when (call.method) {
-                    "scheduleDose" -> result.success(
-                        AlarmScheduler.schedule(
-                            context = this,
-                            doseId = (call.argument<Number>("doseId")!!).toLong(),
-                            triggerAtMillis = (call.argument<Number>("triggerAt")!!).toLong(),
-                            medName = call.argument<String>("medName") ?: "Medication",
-                            dosage = call.argument<String>("dosage") ?: "",
-                        ),
-                    )
-
-                    "cancelDose" -> {
-                        AlarmScheduler.cancel(this, (call.argument<Number>("doseId")!!).toLong())
-                        result.success(true)
-                    }
-
                     "canScheduleExact" -> result.success(AlarmScheduler.canScheduleExact(this))
 
                     "openExactAlarmSettings" -> {
@@ -162,54 +152,6 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
 
-                    /** Outcomes the native alarm screen recorded while Dart wasn't running. */
-                    "drainPendingActions" -> {
-                        val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-                        val out = mutableListOf<Map<String, Any>>()
-                        val editor = prefs.edit()
-                        prefs.all.forEach { (key, value) ->
-                            if (key.startsWith("pending_action_") && !key.startsWith("pending_action_at_")) {
-                                val doseId = key.removePrefix("pending_action_").toLongOrNull()
-                                if (doseId != null) {
-                                    out.add(
-                                        mapOf(
-                                            "doseId" to doseId,
-                                            "action" to (value as? String ?: "TAKEN"),
-                                            "at" to prefs.getLong("pending_action_at_$doseId", 0L),
-                                        ),
-                                    )
-                                    editor.remove(key).remove("pending_action_at_$doseId")
-                                }
-                            }
-                        }
-                        editor.apply()
-                        result.success(out)
-                    }
-
-                    /**
-                     * When each alarm actually fired, per AlarmReceiver.KEY_FIRED_PREFIX.
-                     * Independent of drainPendingActions: that records what the user *did*
-                     * about an alarm, this records whether the alarm *happened* at all --
-                     * the distinction that makes a missed dose attributable instead of a
-                     * mystery.
-                     */
-                    "drainFiredEvents" -> {
-                        val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-                        val out = mutableListOf<Map<String, Any>>()
-                        val editor = prefs.edit()
-                        prefs.all.forEach { (key, value) ->
-                            if (key.startsWith(AlarmReceiver.KEY_FIRED_PREFIX)) {
-                                val doseId = key.removePrefix(AlarmReceiver.KEY_FIRED_PREFIX).toLongOrNull()
-                                if (doseId != null && value is Long) {
-                                    out.add(mapOf("doseId" to doseId, "firedAt" to value))
-                                    editor.remove(key)
-                                }
-                            }
-                        }
-                        editor.apply()
-                        result.success(out)
-                    }
-
                     "appVersion" -> {
                         result.success(packageManager.getPackageInfo(packageName, 0).versionName)
                     }
@@ -237,33 +179,6 @@ class MainActivity : FlutterActivity() {
                         } catch (e: ActivityNotFoundException) {
                             result.success(false)
                         }
-                    }
-
-                    /** An overdue dose exists -- show/update the reminder. */
-                    "updateOutstandingNotification" -> {
-                        OutstandingNotifier.show(
-                            this,
-                            title = call.argument<String>("title") ?: "Missed dose",
-                            text = call.argument<String>("text") ?: "",
-                            shownAt = call.argument<Number>("shownAt")?.toLong() ?: 0L,
-                            // Exactly one missed dose: the notification gets Taken/Skip buttons.
-                            doseId = call.argument<Number>("doseId")?.toLong(),
-                        )
-                        result.success(true)
-                    }
-
-                    /** Doses overdue by this time were swiped away by the user; 0 if none. */
-                    "outstandingDismissedThrough" -> {
-                        result.success(
-                            getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-                                .getLong(OutstandingNotifier.KEY_DISMISSED_THROUGH, 0L),
-                        )
-                    }
-
-                    /** No more overdue doses -- clear the reminder. */
-                    "clearOutstandingNotification" -> {
-                        OutstandingNotifier.clear(this)
-                        result.success(true)
                     }
 
                     // --- backups (see BackupStore for why a user-picked folder) ---

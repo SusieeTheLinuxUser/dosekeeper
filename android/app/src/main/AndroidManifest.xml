@@ -78,6 +78,9 @@
                 <!-- Some OEM skins (incl. ColorOS) use non-standard boot broadcasts. -->
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <!-- Wall clock or zone changed: armed alarms now ring at the wrong time. -->
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
             </intent-filter>
         </receiver>
 

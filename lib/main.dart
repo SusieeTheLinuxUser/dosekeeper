@@ -1,3 +1,5 @@
+import 'dart:ui' show DartPluginRegistrant;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -9,6 +11,29 @@ import 'ui/medications_page.dart';
 import 'ui/today_page.dart';
 
 void main() => runApp(const DoseKeeperApp());
+
+/// Entry point for the headless engine BackgroundSync.kt starts when Android gives us
+/// a trigger (an alarm fired, the clock or time zone changed, the daily safety net, a
+/// reboot) while the app isn't open. It runs the exact same [DoseScheduler.sync] the
+/// foreground app runs -- the scheduling rules live only in Dart. It must not touch
+/// UI: there is no screen, and no widgets are ever built.
+///
+/// The database is deliberately not closed: sqflite shares one native handle per path
+/// across engines, so closing it here would break the foreground app's own handle.
+@pragma('vm:entry-point')
+Future<void> backgroundSync() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  try {
+    await DoseScheduler().sync();
+  } catch (e, st) {
+    debugPrint('backgroundSync failed: $e\n$st');
+  } finally {
+    // Always answer, even on failure: the native side tears the engine down on this
+    // call (and has a hard timeout for the case where even this never arrives).
+    await AlarmBridge.backgroundSyncDone();
+  }
+}
 
 class DoseKeeperApp extends StatelessWidget {
   const DoseKeeperApp({super.key});

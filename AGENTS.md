@@ -19,6 +19,31 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-09: **alarms stay armed with the app never opened, and follow time zone changes.**
+Before, alarms were armed only 3 days ahead and only when the app was open, so they stopped
+3 days after the last open. Now Android triggers start a headless FlutterEngine
+(`BackgroundSync.kt`) that runs the same Dart `DoseScheduler.sync()` (entry point
+`backgroundSync` in `lib/main.dart`). One copy of the rules, in Dart: don't port them to
+Kotlin. The horizon is still 3 days. Triggers: a dose alarm firing (`AlarmReceiver`, 3 s
+later so ringing comes first), boot / app update (`BootReceiver`, after its native
+`rearmAll`), `TIMEZONE_CHANGED` / `TIME_SET`, and a daily safety net (`setAndAllowWhileIdle`,
+for schedules with no alarm for days, e.g. weekly). The method-channel calls sync needs moved
+to `AlarmChannel.kt`, shared with `MainActivity`. A time zone change works through the
+existing orphan cleanup: doses off the new wall clock are cancelled and re-created.
+**No `goAsync()` in `AlarmReceiver`, on purpose:** Android holds the app's next broadcast until
+the last one finishes, which rang a second dose due at the same moment 3 s late.
+Tested on emulators (not a real phone yet): Android 16 debug and Android 12 release, app
+process killed and never opened. A fired alarm armed a dose the clock-change sync couldn't
+reach; reboot brought every alarm back; New York and Tokyo zones moved them to the right wall
+clock; a 5-day clock jump re-armed past the old window; Snooze and Taken caused no double alarm
+(Android 16). How: `adb shell settings put global auto_time 0` (and `auto_time_zone 0`), then
+`adb shell cmd alarm set-time <ms>` / `cmd alarm set-timezone <zone>`, and put both back.
+**Force-stop can't be fixed:** Android deletes every alarm of a force-stopped app (seen: 0
+left) until it's opened again. On ColorOS, check swiping the app away doesn't do the same.
+Known and left alone: after flying, a dose already taken can come back at the new zone's same
+wall-clock time (a west flight rings again; an east flight can show it as missed). That's the
+wall-clock design, and opening the app always did the same.
+
 2026-11-08: **an alarm screen drops doses answered elsewhere, and closes when none are left.**
 Found on the Android 12 emulator: after its doses were marked Taken on Today, the alarm
 screen stayed open behind, and Snooze there re-armed alarms for taken doses (they rang again

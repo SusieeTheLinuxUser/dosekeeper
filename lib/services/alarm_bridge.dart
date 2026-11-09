@@ -86,6 +86,12 @@ class AlarmBridge {
   static Future<void> clearOutstandingNotification() =>
       _channel.invokeMethod('clearOutstandingNotification');
 
+  /// Tells the native side a headless backgroundSync run is over, so it can tear the
+  /// engine down. Only the backgroundSync entry point calls this; the foreground app
+  /// never does.
+  static Future<void> backgroundSyncDone() =>
+      _channel.invokeMethod('backgroundSyncDone');
+
   /// The installed version as Android reports it, e.g. "1.1.0" or "1.1.0-debug".
   static Future<String> appVersion() async =>
       await _channel.invokeMethod<String>('appVersion') ?? 'Unknown';

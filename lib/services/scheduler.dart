@@ -12,6 +12,11 @@ class DoseScheduler {
 
   /// How far ahead to materialise doses and arm alarms. Android tolerates a few dozen
   /// pending alarms comfortably; this keeps us well inside that.
+  ///
+  /// Must stay longer than any gap between syncs. Besides every app open, sync also
+  /// runs natively (BackgroundSync.kt) every time an alarm fires, on every clock or
+  /// time-zone change, on reboot, and from a daily safety-net alarm, so alarms stay
+  /// armed even if the app is never opened.
   static const horizon = Duration(days: 3);
 
   /// [minutes] past midnight on [day], by the wall clock. Built from date parts, never
