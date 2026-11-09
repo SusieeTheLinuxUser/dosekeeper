@@ -24,7 +24,7 @@ object OutstandingNotifier {
     private const val NOTIFICATION_ID = 4243
     const val KEY_DISMISSED_THROUGH = "outstanding_dismissed_through"
     const val EXTRA_ACTION = "outstanding_action"
-    const val ACTION_TAKEN = "TAKEN" // the strings Dart's drainPendingActions expects
+    const val ACTION_TAKEN = "TAKEN" // the strings Dart's readPendingActions expects
     const val ACTION_SKIPPED = "SKIPPED"
     private const val REQ_TAKEN = 1
     private const val REQ_SKIPPED = 2

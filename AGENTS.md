@@ -40,7 +40,10 @@ clock; a 5-day clock jump re-armed past the old window; Snooze and Taken caused 
 `adb shell cmd alarm set-time <ms>` / `cmd alarm set-timezone <zone>`, and put both back.
 **Force-stop can't be fixed:** Android deletes every alarm of a force-stopped app (seen: 0
 left) until it's opened again. On ColorOS, check swiping the app away doesn't do the same.
-Known and left alone: after flying, a dose already taken can come back at the new zone's same
+Alarm-screen and notification answers now stay stored until the database has them
+(`readPendingActions`, then `ackPendingAction`), so a sync dying midway can't lose a Taken.
+Known and left alone: a sync already running when Taken is tapped on a future dose can re-arm
+it (sub-second window, one extra ring, the app's own sync can do the same). Also, after flying, a dose already taken can come back at the new zone's same
 wall-clock time (a west flight rings again; an east flight can show it as missed). That's the
 wall-clock design, and opening the app always did the same.
 

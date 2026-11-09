@@ -167,16 +167,17 @@ class DoseScheduler {
   /// Applies outcomes the native alarm screen (or a missed-notification Taken/Skip
   /// button) recorded while Dart wasn't running.
   Future<void> applyPendingAlarmActions() async {
-    final pending = await AlarmBridge.drainPendingActions();
+    final pending = await AlarmBridge.readPendingActions();
     for (final action in pending) {
-      final dose = await _db.dose(action.doseId);
-      if (dose == null) continue;
-      if (action.isTaken) {
-        await _db.setDoseStatus(action.doseId, DoseStatus.taken, at: action.at);
-      } else if (action.isSkipped) {
-        await _db.setDoseStatus(action.doseId, DoseStatus.skipped, at: action.at);
+      if (await _db.dose(action.doseId) != null) {
+        if (action.isTaken) {
+          await _db.setDoseStatus(action.doseId, DoseStatus.taken, at: action.at);
+        } else if (action.isSkipped) {
+          await _db.setDoseStatus(action.doseId, DoseStatus.skipped, at: action.at);
+        }
+        // SNOOZE re-arms itself natively; the dose stays pending on purpose.
       }
-      // SNOOZE re-arms itself natively; the dose stays pending on purpose.
+      await AlarmBridge.ackPendingAction(action); // last: a sync dying before this replays it
     }
   }
 

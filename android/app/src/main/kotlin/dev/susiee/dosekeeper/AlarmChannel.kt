@@ -41,10 +41,9 @@ object AlarmChannel {
             }
 
             /** Outcomes the native alarm screen recorded while Dart wasn't running. */
-            "drainPendingActions" -> {
+            "readPendingActions" -> {
                 val prefs = context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
                 val out = mutableListOf<Map<String, Any>>()
-                val editor = prefs.edit()
                 prefs.all.forEach { (key, value) ->
                     if (key.startsWith("pending_action_") && !key.startsWith("pending_action_at_")) {
                         val doseId = key.removePrefix("pending_action_").toLongOrNull()
@@ -56,17 +55,31 @@ object AlarmChannel {
                                     "at" to prefs.getLong("pending_action_at_$doseId", 0L),
                                 ),
                             )
-                            editor.remove(key).remove("pending_action_at_$doseId")
                         }
                     }
                 }
-                editor.apply()
                 result.success(out)
             }
 
             /**
+             * The database has this outcome, so the record can go. Not removed on read: a
+             * sync dying in between (it can run with no screen open) would lose a Taken,
+             * and a dose shown as missed can get taken twice. Only if it's still the same
+             * record: the user may have answered again since it was read.
+             */
+            "ackPendingAction" -> {
+                val doseId = (call.argument<Number>("doseId")!!).toLong()
+                val at = (call.argument<Number>("at")!!).toLong()
+                val prefs = context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+                if (prefs.getLong("pending_action_at_$doseId", 0L) == at) {
+                    prefs.edit().remove("pending_action_$doseId").remove("pending_action_at_$doseId").apply()
+                }
+                result.success(true)
+            }
+
+            /**
              * When each alarm actually fired, per AlarmReceiver.KEY_FIRED_PREFIX.
-             * Independent of drainPendingActions: that records what the user *did*
+             * Independent of readPendingActions: that records what the user *did*
              * about an alarm, this records whether the alarm *happened* at all --
              * the distinction that makes a missed dose attributable instead of a
              * mystery.

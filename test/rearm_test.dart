@@ -18,6 +18,7 @@ void main() {
   var cancelled = <int>[];
   var scheduleCalls = 0;
   var pendingActions = <Map<String, dynamic>>[];
+  var statusAtAck = <int, DoseStatus?>{}; // what the database held when acked
 
   setUpAll(() async {
     sqfliteFfiInit();
@@ -42,10 +43,16 @@ void main() {
             armed.remove(id);
             cancelled.add(id);
             return null;
-          case 'drainPendingActions':
-            final out = pendingActions;
-            pendingActions = [];
-            return out;
+          case 'readPendingActions':
+            return pendingActions;
+          case 'ackPendingAction':
+            final id = args['doseId'] as int;
+            statusAtAck[id] = (await DoseDatabase.instance.dose(id))?.status;
+            pendingActions = [
+              for (final a in pendingActions)
+                if (a['doseId'] != id || a['at'] != args['at']) a,
+            ];
+            return true;
           case 'drainFiredEvents':
             return [];
           case 'outstandingDismissedThrough':
@@ -62,6 +69,7 @@ void main() {
     cancelled = [];
     scheduleCalls = 0;
     pendingActions = [];
+    statusAtAck = {};
     // DoseDatabase is a singleton; isolate tests by clearing its rows instead
     // of re-opening at a new path.
     final conn = await DoseDatabase.instance.database;
@@ -163,5 +171,25 @@ void main() {
     expect((await db.dose(id!))?.status, DoseStatus.taken);
     expect(armed.containsKey(id), isFalse,
         reason: 'a taken dose must not get an alarm');
+  });
+
+  test('a Taken record is removed only after the database has it', () async {
+    final medId = await addMed();
+    final id = await db.ensureDose(medId, DateTime(2026, 11, 9, 9, 0));
+    pendingActions = [
+      {'doseId': id, 'action': 'TAKEN', 'at': ms(DateTime(2026, 11, 9, 9, 0))},
+    ];
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0));
+    expect(statusAtAck[id], DoseStatus.taken,
+        reason: 'acked before the status was saved, a dying sync would lose it');
+    expect(pendingActions, isEmpty);
+  });
+
+  test('a record for a dose that no longer exists is cleared, not kept forever', () async {
+    pendingActions = [
+      {'doseId': 987654, 'action': 'TAKEN', 'at': ms(DateTime(2026, 11, 9, 9, 0))},
+    ];
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0));
+    expect(pendingActions, isEmpty);
   });
 }

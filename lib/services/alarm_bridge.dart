@@ -130,12 +130,20 @@ class AlarmBridge {
 
   /// Outcomes the native alarm screen (or a missed-notification Taken/Skip button)
   /// recorded while Dart was not running.
-  static Future<List<PendingAlarmAction>> drainPendingActions() async {
-    final raw = await _channel.invokeMethod<List<dynamic>>('drainPendingActions');
+  /// They stay stored until [ackPendingAction].
+  static Future<List<PendingAlarmAction>> readPendingActions() async {
+    final raw = await _channel.invokeMethod<List<dynamic>>('readPendingActions');
     return (raw ?? [])
         .map((e) => PendingAlarmAction.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
+
+  /// Call once the database has [action], so an interrupted sync can't lose it.
+  static Future<void> ackPendingAction(PendingAlarmAction action) =>
+      _channel.invokeMethod('ackPendingAction', {
+        'doseId': action.doseId,
+        'at': action.at.millisecondsSinceEpoch,
+      });
 
   /// When each alarm actually fired (recorded by AlarmReceiver the instant the OS
   /// delivers it), independent of whether/how the user responded. This is what makes
