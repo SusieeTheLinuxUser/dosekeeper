@@ -121,7 +121,9 @@ on an Android 12 emulator on 2026-11-08 (still not on a real Android 12 phone).
 v1.1.7 was merged to `master` (PR #22) but has no `v1.1.7` tag or stable release yet: the
 user may release it later. `1.1.7-debug` is on the phone, with the Google backup switch off.
 `dev-1.1.8` (1.1.8+10, debug-signed, same key) was released on 2026-11-08 with everything up
-to PR #39; not yet installed on the phone. Still no stable `v1.1.x` release.
+to PR #39. `dev-1.1.9` (1.1.9+11, same debug key) was released on 2026-11-09 with everything up
+to PR #43, including the background alarm top-up from PR #42. Neither is installed on the phone
+yet. Still no stable `v1.1.x` release.
 
 Google backup on a stock Android 16 emulator (2026-11-04), with a signed-in spare account:
 switch on, `bmgr backupnow` succeeds, about 36 KB. **Switch off, it reports "Transport
