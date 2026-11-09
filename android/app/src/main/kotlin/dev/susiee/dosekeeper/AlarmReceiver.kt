@@ -49,10 +49,19 @@ class AlarmReceiver : BroadcastReceiver() {
                 intent.getStringExtra(AlarmScheduler.EXTRA_DOSAGE) ?: "",
             )
         }
+
+        // Ring first: nothing may delay it, so the sync that tops the horizon up waits
+        // a few seconds. Doses are at whole minutes anyway, so a sync a few seconds
+        // after one can't straddle the next. No goAsync() here: Android holds this app's
+        // next broadcast until this one finishes, which rang a second dose due at the
+        // same moment 3 s late (seen on Android 16). The ringing service keeps the
+        // process alive instead.
+        BackgroundSync.request(context, delayMs = RING_FIRST_DELAY_MS)
     }
 
     companion object {
         private const val TAG = "DoseKeeper/Receiver"
+        private const val RING_FIRST_DELAY_MS = 3_000L
         const val KEY_FIRED_PREFIX = "fired_at_"
     }
 }
