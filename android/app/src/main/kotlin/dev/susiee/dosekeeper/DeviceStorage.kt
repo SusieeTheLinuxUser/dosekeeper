@@ -3,6 +3,7 @@ package dev.susiee.dosekeeper
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.UserManager
+import android.util.Log
 
 /**
  * The native prefs the alarm path needs, in device-protected storage: readable after a
@@ -34,7 +35,14 @@ object DeviceStorage {
             // All of them on the first access, not each on its own: an old file moved over later
             // would overwrite what was written to the new one before unlock (a Taken, a fired time).
             for (n in NAMES + name) {
-                if (n !in migrated && deviceContext.moveSharedPreferencesFrom(context, n)) migrated.add(n)
+                if (n in migrated) continue
+                if (deviceContext.moveSharedPreferencesFrom(context, n)) {
+                    migrated.add(n)
+                } else {
+                    // ponytail: a copy error (disk full). Retried next call; meanwhile the next
+                    // sync re-records every armed alarm here, and settings read as defaults.
+                    Log.w("DoseKeeper/Storage", "couldn't move $n to device storage; will retry")
+                }
             }
         }
         return deviceContext.getSharedPreferences(name, Context.MODE_PRIVATE)
