@@ -19,6 +19,27 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-26: **open gap, not fixed: no alarm is armed after a restart until the phone is
+unlocked once.** Found in a read-only bug hunt (Codex plus a second pass); nothing else in
+the alarm, sync, time zone, restore or "answered elsewhere" paths held up as a real defect.
+Android deletes alarms on reboot, and with a PIN/pattern set, an app that isn't
+direct-boot-aware can't run at all until the first unlock: `BootReceiver` gets
+`BOOT_COMPLETED` only then (the manifest has no `android:directBootAware`, and the registry,
+`dosekeeper_native` and the answered list all live in credential-protected prefs). So a phone
+that restarts overnight (auto-installed OS update, battery dying and coming back on a charger)
+and stays locked rings nothing: a 07:00 dose rings only at unlock + 10 s, and not at all if
+the unlock is more than 2 h late (`LATE_RING_WINDOW_MS`). Fixing it means direct boot for
+`BootReceiver`, `AlarmReceiver`, `AlarmService` and `AlarmActivity` (`LOCKED_BOOT_COMPLETED`),
+moving every prefs file they touch to device-protected storage
+(`createDeviceProtectedStorageContext()`, `moveSharedPreferencesFrom` for existing data),
+and skipping the Dart sync before unlock (the database is in credential storage). Only
+checkable on a device or emulator with a PIN: set one, add a med due ~10 minutes ahead and
+note its alarm in `adb shell dumpsys alarm | grep -A3 dev.susiee.dosekeeper` (the dose
+alarm is the `ALARM_FIRE` one, not `DAILY_SYNC`, the safety net). `adb reboot`, don't
+unlock: that same dose alarm must be listed again, and the dose must **ring while still
+locked** (alarm screen over the lockscreen), since an armed alarm alone doesn't prove the
+receiver, service and screen run before unlock.
+
 2026-11-09: **alarms stay armed with the app never opened, and follow time zone changes.**
 Before, alarms were armed only 3 days ahead and only when the app was open, so they stopped
 3 days after the last open. Now Android triggers start a headless FlutterEngine
