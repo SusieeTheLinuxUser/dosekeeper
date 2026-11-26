@@ -143,8 +143,9 @@ internal object FiredAlarmEvents {
             prefs.all.forEach { (key, value) ->
                 val doseId = key.removePrefix(AlarmReceiver.KEY_FIRED_PREFIX).toLongOrNull()
                     ?.takeIf { key.startsWith(AlarmReceiver.KEY_FIRED_PREFIX) }
-                if (doseId != null && value is Long && value >= (latest[doseId] ?: Long.MIN_VALUE)) {
-                    latest[doseId] = value
+                if (doseId != null && value is Long) {
+                    val previous = latest[doseId]
+                    if (previous == null || value < previous) latest[doseId] = value
                 }
             }
         }

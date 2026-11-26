@@ -98,7 +98,7 @@ class AlarmRegistryTest {
         assertFalse(prefs.contains(key))
     }
 
-    @Test fun firedEventsSurviveFailedMigrationAndReadTheNewestCopy() {
+    @Test fun firedEventsSurviveFailedMigrationAndReadTheEarliestCopyFirst() {
         val key = "${AlarmReceiver.KEY_FIRED_PREFIX}22"
         context.getSharedPreferences(BootReceiver.PREFS, 0).edit().clear().commit()
         context.createDeviceProtectedStorageContext()
@@ -112,11 +112,15 @@ class AlarmRegistryTest {
         }
         DeviceStorage.prefs(context, BootReceiver.PREFS).edit().putLong(key, 200L).commit()
 
-        assertEquals(listOf(mapOf("doseId" to 22L, "firedAt" to 200L)), FiredAlarmEvents.read(context))
-        assertTrue(FiredAlarmEvents.ack(context, 22L, 200L))
-        assertEquals(100L, context.getSharedPreferences(BootReceiver.PREFS, 0).getLong(key, 0L))
+        val devicePrefs = context.createDeviceProtectedStorageContext()
+            .getSharedPreferences(BootReceiver.PREFS, 0)
+        val credentialPrefs = context.getSharedPreferences(BootReceiver.PREFS, 0)
         assertEquals(listOf(mapOf("doseId" to 22L, "firedAt" to 100L)), FiredAlarmEvents.read(context))
         assertTrue(FiredAlarmEvents.ack(context, 22L, 100L))
+        assertFalse(credentialPrefs.contains(key))
+        assertEquals(200L, devicePrefs.getLong(key, 0L))
+        assertEquals(listOf(mapOf("doseId" to 22L, "firedAt" to 200L)), FiredAlarmEvents.read(context))
+        assertTrue(FiredAlarmEvents.ack(context, 22L, 200L))
     }
 
     @Test fun rearmAfterRebootRingsLateDosesAndDropsMissedOnes() {

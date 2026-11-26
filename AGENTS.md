@@ -24,8 +24,9 @@ background/foreground sync reads native `fired_at_<dose id>` records, stores the
 `doses.fired_at`, then acknowledges the same timestamp. If a sync dies or SQLite fails
 before the write, the native event remains for the next sync. It reads both the
 device-protected and retained credential-protected preference copies, so a failed
-migration cannot hide an older event. A newer firing cannot be erased by acknowledging
-an older event; records for doses removed before sync are acknowledged too. Covered by
+migration cannot hide an older event. When copies disagree, the earlier firing is saved
+first and the later one remains for the next sync; records for doses removed before sync
+are acknowledged too. Covered by
 the `firedEvents*` tests in `AlarmRegistryTest` and `rearm_test.dart`.
 
 2026-11-26: **alarms come back after a restart before the phone is unlocked (Direct Boot).**
