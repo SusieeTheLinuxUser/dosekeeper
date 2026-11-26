@@ -42,23 +42,25 @@ object AlarmChannel {
 
             /** Outcomes the native alarm screen recorded while Dart wasn't running. */
             "readPendingActions" -> {
-                val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
-                val out = mutableListOf<Map<String, Any>>()
-                prefs.all.forEach { (key, value) ->
-                    if (key.startsWith("pending_action_") && !key.startsWith("pending_action_at_")) {
-                        val doseId = key.removePrefix("pending_action_").toLongOrNull()
-                        if (doseId != null) {
-                            out.add(
-                                mapOf(
-                                    "doseId" to doseId,
-                                    "action" to (value as? String ?: "TAKEN"),
-                                    "at" to prefs.getLong("pending_action_at_$doseId", 0L),
-                                ),
-                            )
+                val copies = listOf(
+                    DeviceStorage.prefs(context, BootReceiver.PREFS),
+                    context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE),
+                )
+                val latest = mutableMapOf<Long, Pair<String, Long>>()
+                copies.forEach { prefs ->
+                    prefs.all.forEach { (key, value) ->
+                        if (key.startsWith("pending_action_") && !key.startsWith("pending_action_at_")) {
+                            val doseId = key.removePrefix("pending_action_").toLongOrNull() ?: return@forEach
+                            val at = prefs.getLong("pending_action_at_$doseId", 0L)
+                            if (at >= (latest[doseId]?.second ?: Long.MIN_VALUE)) {
+                                latest[doseId] = (value as? String ?: "TAKEN") to at
+                            }
                         }
                     }
                 }
-                result.success(out)
+                result.success(latest.map { (doseId, action) ->
+                    mapOf("doseId" to doseId, "action" to action.first, "at" to action.second)
+                })
             }
 
             /**
@@ -71,8 +73,10 @@ object AlarmChannel {
                 val doseId = (call.argument<Number>("doseId")!!).toLong()
                 val at = (call.argument<Number>("at")!!).toLong()
                 val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
-                if (prefs.getLong("pending_action_at_$doseId", 0L) == at) {
-                    prefs.edit().remove("pending_action_$doseId").remove("pending_action_at_$doseId").apply()
+                listOf(prefs, context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)).forEach { copy ->
+                    if (copy.getLong("pending_action_at_$doseId", 0L) == at) {
+                        copy.edit().remove("pending_action_$doseId").remove("pending_action_at_$doseId").apply()
+                    }
                 }
                 result.success(true)
             }

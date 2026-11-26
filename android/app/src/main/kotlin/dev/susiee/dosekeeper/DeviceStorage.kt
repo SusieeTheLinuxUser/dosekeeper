@@ -37,7 +37,24 @@ object DeviceStorage {
             // moved later would overwrite what was written here since (a Taken, a fired time).
             for (n in NAMES + name) {
                 if (n in migrated) continue
+                if (n == BootReceiver.PREFS &&
+                    context.getSharedPreferences(n, Context.MODE_PRIVATE).all.isNotEmpty() &&
+                    deviceContext.getSharedPreferences(n, Context.MODE_PRIVATE).all.isNotEmpty()
+                ) {
+                    // Both copies may now contain unacknowledged actions. Never let a retry
+                    // replace device-protected writes with the older credential copy.
+                    migrated.add(n)
+                    continue
+                }
                 if (!deviceContext.moveSharedPreferencesFrom(context, n)) {
+                    if (n == BootReceiver.PREFS) {
+                        // Unlike the alarm registry and settings, this file can contain a
+                        // user's Taken/Snooze action that Dart has not acknowledged yet.
+                        // Keep the credential copy so a failed move cannot discard it.
+                        Log.e("DoseKeeper/Storage", "couldn't move $n; preserving pending actions")
+                        migrated.add(n)
+                        continue
+                    }
                     // A copy error (disk full). The old file goes, so no later move can copy it
                     // over newer data here. ponytail: its contents are lost; the next sync
                     // re-records every armed alarm, and settings read as their defaults.

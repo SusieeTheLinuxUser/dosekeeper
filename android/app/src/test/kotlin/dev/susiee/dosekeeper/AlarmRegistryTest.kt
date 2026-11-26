@@ -141,13 +141,16 @@ class AlarmRegistryTest {
         } finally {
             target.parentFile!!.setWritable(true); target.setWritable(true)
         }
-        assertFalse(prefsFile(context, BootReceiver.PREFS).exists()) // dropped, so nothing to move later
+        assertTrue(prefsFile(context, BootReceiver.PREFS).exists()) // pending action source retained
+        de.getSharedPreferences(BootReceiver.PREFS, 0).edit().putString("pending_action_10", "SNOOZE").commit()
 
         DeviceStorage.migrated.clear() // a new process
         val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
 
-        assertEquals("TAKEN", prefs.getString("pending_action_9", null))
-        assertFalse(prefs.contains("stale"))
+        assertEquals("SNOOZE", prefs.getString("pending_action_10", null))
+        val persisted = prefsFile(de, BootReceiver.PREFS).readText()
+        assertTrue(persisted.contains("pending_action_10"))
+        assertFalse(persisted.contains("stale"))
     }
 
     @Test fun noMigrationWhileLocked() {
