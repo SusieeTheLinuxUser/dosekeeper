@@ -31,3 +31,6 @@ jobs:
 
       # Catches native Kotlin build breakage that analyze/test can't see.
       - run: flutter build apk --debug
+      # Native alarm-layer unit tests (Robolectric)
+      - run: ./gradlew :app:testDebugUnitTest
+        working-directory: android

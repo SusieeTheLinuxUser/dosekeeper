@@ -23,7 +23,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // ring (a real bug, the exact failure mode this app exists to catch), or did it
         // ring and get ignored/dealt with later (not a bug at all)? Recorded here, first,
         // so the answer survives even if everything downstream fails.
-        context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+        DeviceStorage.prefs(context, BootReceiver.PREFS)
             .edit()
             .putLong("$KEY_FIRED_PREFIX$doseId", System.currentTimeMillis())
             .apply()

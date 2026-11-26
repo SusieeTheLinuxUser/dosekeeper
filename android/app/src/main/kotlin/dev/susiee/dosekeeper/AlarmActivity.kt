@@ -165,7 +165,7 @@ class AlarmActivity : Activity() {
             }
         }
 
-        val prefs = getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE).edit()
+        val prefs = DeviceStorage.prefs(this@AlarmActivity, BootReceiver.PREFS).edit()
         for (dose in doses) {
             prefs.putString("pending_action_${dose.id}", action.name)
                 .putLong("pending_action_at_${dose.id}", now)
@@ -222,7 +222,7 @@ class AlarmActivity : Activity() {
 
         /** Dose id -> when it was answered elsewhere. Its own file: Dart drains BootReceiver.PREFS. */
         private fun answered(context: Context) =
-            context.getSharedPreferences("dosekeeper_answered_doses", Context.MODE_PRIVATE)
+            DeviceStorage.prefs(context, "dosekeeper_answered_doses")
 
         private const val KEY_OPENED_AT = "opened_at"
         private const val ANSWERED_KEEP_MS = 2 * 24 * 60 * 60 * 1000L

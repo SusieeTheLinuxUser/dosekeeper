@@ -21,7 +21,7 @@ object AlarmChannel {
                 // Sync read this dose as upcoming, then its alarm fired while sync was
                 // still running: a fired record already exists for it. Arming the now-past
                 // time would ring it a second time at once -- so count it as done.
-                val fired = context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+                val fired = DeviceStorage.prefs(context, BootReceiver.PREFS)
                     .contains("${AlarmReceiver.KEY_FIRED_PREFIX}$doseId")
                 result.success(
                     fired && triggerAt <= System.currentTimeMillis() ||
@@ -42,23 +42,25 @@ object AlarmChannel {
 
             /** Outcomes the native alarm screen recorded while Dart wasn't running. */
             "readPendingActions" -> {
-                val prefs = context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-                val out = mutableListOf<Map<String, Any>>()
-                prefs.all.forEach { (key, value) ->
-                    if (key.startsWith("pending_action_") && !key.startsWith("pending_action_at_")) {
-                        val doseId = key.removePrefix("pending_action_").toLongOrNull()
-                        if (doseId != null) {
-                            out.add(
-                                mapOf(
-                                    "doseId" to doseId,
-                                    "action" to (value as? String ?: "TAKEN"),
-                                    "at" to prefs.getLong("pending_action_at_$doseId", 0L),
-                                ),
-                            )
+                val copies = listOf(
+                    DeviceStorage.prefs(context, BootReceiver.PREFS),
+                    context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE),
+                )
+                val latest = mutableMapOf<Long, Pair<String, Long>>()
+                copies.forEach { prefs ->
+                    prefs.all.forEach { (key, value) ->
+                        if (key.startsWith("pending_action_") && !key.startsWith("pending_action_at_")) {
+                            val doseId = key.removePrefix("pending_action_").toLongOrNull() ?: return@forEach
+                            val at = prefs.getLong("pending_action_at_$doseId", 0L)
+                            if (at >= (latest[doseId]?.second ?: Long.MIN_VALUE)) {
+                                latest[doseId] = (value as? String ?: "TAKEN") to at
+                            }
                         }
                     }
                 }
-                result.success(out)
+                result.success(latest.map { (doseId, action) ->
+                    mapOf("doseId" to doseId, "action" to action.first, "at" to action.second)
+                })
             }
 
             /**
@@ -70,9 +72,11 @@ object AlarmChannel {
             "ackPendingAction" -> {
                 val doseId = (call.argument<Number>("doseId")!!).toLong()
                 val at = (call.argument<Number>("at")!!).toLong()
-                val prefs = context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
-                if (prefs.getLong("pending_action_at_$doseId", 0L) == at) {
-                    prefs.edit().remove("pending_action_$doseId").remove("pending_action_at_$doseId").apply()
+                val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
+                listOf(prefs, context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)).forEach { copy ->
+                    if (copy.getLong("pending_action_at_$doseId", 0L) == at) {
+                        copy.edit().remove("pending_action_$doseId").remove("pending_action_at_$doseId").apply()
+                    }
                 }
                 result.success(true)
             }
@@ -85,7 +89,7 @@ object AlarmChannel {
              * mystery.
              */
             "drainFiredEvents" -> {
-                val prefs = context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+                val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
                 val out = mutableListOf<Map<String, Any>>()
                 val editor = prefs.edit()
                 prefs.all.forEach { (key, value) ->
@@ -117,7 +121,7 @@ object AlarmChannel {
             /** Doses overdue by this time were swiped away by the user; 0 if none. */
             "outstandingDismissedThrough" -> {
                 result.success(
-                    context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+                    DeviceStorage.prefs(context, BootReceiver.PREFS)
                         .getLong(OutstandingNotifier.KEY_DISMISSED_THROUGH, 0L),
                 )
             }

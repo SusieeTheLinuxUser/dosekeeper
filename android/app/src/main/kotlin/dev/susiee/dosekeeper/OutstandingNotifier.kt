@@ -121,7 +121,7 @@ object OutstandingNotifier {
 class OutstandingDismissedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val through = intent.getLongExtra(OutstandingNotifier.KEY_DISMISSED_THROUGH, 0L)
-        context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+        DeviceStorage.prefs(context, BootReceiver.PREFS)
             .edit()
             .putLong(OutstandingNotifier.KEY_DISMISSED_THROUGH, through)
             .apply()
@@ -143,7 +143,7 @@ class OutstandingActionReceiver : BroadcastReceiver() {
         ) {
             return
         }
-        context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE)
+        DeviceStorage.prefs(context, BootReceiver.PREFS)
             .edit()
             .putString("pending_action_$doseId", action)
             .putLong("pending_action_at_$doseId", System.currentTimeMillis())

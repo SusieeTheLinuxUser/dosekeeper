@@ -20,6 +20,7 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 
@@ -87,29 +88,45 @@ class AlarmService : Service() {
     }
 
     private fun playAlarmSound() {
-        try {
-            val uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            // Assigned before it's set up, so a failure below (bad ringtone URI, prepare()
-            // throwing) still leaves it where releaseRingingResources() will free it.
-            player = MediaPlayer()
-            player?.apply {
-                setDataSource(this@AlarmService, uri)
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                )
-                isLooping = true
-                prepare()
-                // Quiet before start(), so not even the first moment plays at full volume.
-                val ramp = SnoozePrefs.volumeRamp(this@AlarmService)
-                if (ramp) setVolume(RAMP_START_VOLUME, RAMP_START_VOLUME)
-                start()
-                if (ramp) startVolumeRamp(this)
+        val chosen = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
+        // Before the first unlock after a restart (Direct Boot) the chosen sound is a media
+        // file that may not be readable yet. Settings' alarm URI plays the system's own copy,
+        // kept in device storage for exactly this. So: that one first while locked, and
+        // either one as the backup for the other -- a silent alarm is the worst outcome.
+        val settingsCopy = Settings.System.DEFAULT_ALARM_ALERT_URI
+        val uris = (if (DeviceStorage.isUnlocked(this)) listOf(chosen, settingsCopy) else listOf(settingsCopy, chosen))
+            .plus(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)).filterNotNull().distinct()
+        for (uri in uris) {
+            try {
+                // Assigned before it's set up, so a failure below (bad ringtone URI, prepare()
+                // throwing) still leaves it where releaseRingingResources() will free it.
+                player = MediaPlayer()
+                player?.apply {
+                    setDataSource(this@AlarmService, uri)
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build(),
+                    )
+                    isLooping = true
+                    prepare()
+                    // Quiet before start(), so not even the first moment plays at full volume.
+                    val ramp = SnoozePrefs.volumeRamp(this@AlarmService)
+                    if (ramp) setVolume(RAMP_START_VOLUME, RAMP_START_VOLUME)
+                    start()
+                    if (ramp) startVolumeRamp(this)
+                }
+                break
+            } catch (e: Exception) {
+                Log.e(TAG, "failed to play alarm sound $uri", e)
+                // Only the player: the wake lock and vibration must keep going.
+                player?.release()
+                player = null
             }
+        }
+        if (player == null) return
+        try {
             // Make sure the alarm stream is actually audible.
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             if (am.getStreamVolume(AudioManager.STREAM_ALARM) == 0) {
@@ -120,7 +137,7 @@ class AlarmService : Service() {
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "failed to play alarm sound", e)
+            Log.e(TAG, "couldn't raise the alarm volume", e)
         }
     }
 
@@ -263,6 +280,9 @@ class AlarmService : Service() {
                 .setFullScreenIntent(fullScreen, true)
                 .setContentIntent(fullScreen)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                // Android 12+ holds a foreground service's notification back 10 s, and with it the
+                // full-screen alarm screen (seen on an Android 16 emulator: rang at :00, screen at :10).
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
                 .build()
         }
 

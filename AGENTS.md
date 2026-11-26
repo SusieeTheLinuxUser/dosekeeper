@@ -19,26 +19,54 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
-2026-11-26: **open gap, not fixed: no alarm is armed after a restart until the phone is
-unlocked once.** Found in a read-only bug hunt (Codex plus a second pass); nothing else in
-the alarm, sync, time zone, restore or "answered elsewhere" paths held up as a real defect.
-Android deletes alarms on reboot, and with a PIN/pattern set, an app that isn't
-direct-boot-aware can't run at all until the first unlock: `BootReceiver` gets
-`BOOT_COMPLETED` only then (the manifest has no `android:directBootAware`, and the registry,
-`dosekeeper_native` and the answered list all live in credential-protected prefs). So a phone
-that restarts overnight (auto-installed OS update, battery dying and coming back on a charger)
-and stays locked rings nothing: a 07:00 dose rings only at unlock + 10 s, and not at all if
-the unlock is more than 2 h late (`LATE_RING_WINDOW_MS`). Fixing it means direct boot for
-`BootReceiver`, `AlarmReceiver`, `AlarmService` and `AlarmActivity` (`LOCKED_BOOT_COMPLETED`),
-moving every prefs file they touch to device-protected storage
-(`createDeviceProtectedStorageContext()`, `moveSharedPreferencesFrom` for existing data),
-and skipping the Dart sync before unlock (the database is in credential storage). Only
-checkable on a device or emulator with a PIN: set one, add a med due ~10 minutes ahead and
-note its alarm in `adb shell dumpsys alarm | grep -A3 dev.susiee.dosekeeper` (the dose
-alarm is the `ALARM_FIRE` one, not `DAILY_SYNC`, the safety net). `adb reboot`, don't
-unlock: that same dose alarm must be listed again, and the dose must **ring while still
-locked** (alarm screen over the lockscreen), since an armed alarm alone doesn't prove the
-receiver, service and screen run before unlock.
+2026-11-26: **alarms come back after a restart before the phone is unlocked (Direct Boot).**
+The gap (found in a read-only bug hunt, PR #45): with a PIN/pattern set, an app that isn't
+direct-boot-aware can't run until the first unlock, and its normal (credential-encrypted)
+storage stays unreadable until then. So a phone that restarted overnight (auto OS update,
+dead battery back on a charger) and stayed locked rang nothing: a 07:00 dose rang at unlock
++ 10 s, or never if the unlock was over 2 h late (`LATE_RING_WINDOW_MS`).
+The fix:
+- `BootReceiver`, `AlarmReceiver`, `AlarmService` and `AlarmActivity` are
+  `directBootAware`; `BootReceiver` also takes `LOCKED_BOOT_COMPLETED` and re-arms from the
+  registry then. `BOOT_COMPLETED` still follows at unlock: it re-arms again (harmless) and
+  runs the Dart sync. `MainActivity`, the missed-dose receivers and the app stay unaware.
+- `DeviceStorage.kt`: every native prefs file the alarm path touches lives in
+  device-protected storage (readable before unlock). The first access while unlocked moves
+  all four over from the old location (`moveSharedPreferencesFrom`), together. A move copies
+  the old file over the new one, so a later or retried move would overwrite what was written
+  since (CodeRabbit, PR #46): a failed move (disk full) deletes the old file instead, losing
+  its contents (the next sync re-records the alarms; settings fall back to defaults). On an update that happens at
+  `MY_PACKAGE_REPLACED`, seen on the emulator.
+- **What's readable before unlock** (privacy): `dosekeeper_armed_alarms` (dose id -> time,
+  medication name, dosage: the alarm label, for the next 3 days), `dosekeeper_native` (dose
+  ids with fired / Taken / Snooze / Skip times, and when the missed-dose notification was
+  swiped), `dosekeeper_answered_doses` (dose ids), `dosekeeper_settings` (snooze length,
+  louder-alarm switch). Not there: notes, schedules, history, the database, the backup folder.
+- Taken and Snooze **work while locked**: they're the same prefs records as before, and the
+  sync at unlock puts them in the database. `BackgroundSync.request` skips while locked (the
+  database and Flutter's files are in normal storage).
+- While locked the sound plays from Settings' alarm URI (Android keeps its own copy in
+  device storage), with the chosen ringtone as the backup, and the other way round unlocked.
+- The ringing notification is now `FOREGROUND_SERVICE_IMMEDIATE`: Android 12+ held it, and
+  so the alarm screen, back 10 s (the ring itself was on time). Not new, seen while testing this.
+- First native unit tests: `android/app/src/test/.../AlarmRegistryTest.kt` (Robolectric),
+  `./gradlew :app:testDebugUnitTest` in `android/`, also in CI. Locally it needs
+  `JAVA_HOME=/usr/lib/jvm/java-17-openjdk` (the JDK Flutter is set to); the default JDK 27
+  fails in Gradle's `jlink` step.
+**Tested on the Android 16 emulator (`dosekeeper-test`, headless `-no-window`), PIN set,
+2026-11-26:** after `adb reboot`, `dumpsys user` showed `RUNNING_LOCKED`, the log showed
+`LOCKED_BOOT_COMPLETED` and the skipped sync, and `dumpsys alarm` listed the same dose
+alarms as before. The dose rang on time while still locked (alarm-stream player in
+`dumpsys audio`, alarm screen over the lockscreen); Taken there stopped it; after unlock the
+database had it `taken` with `fired_at` on time. A second run: screen at +0.03 s, and Snooze
+while locked re-armed it 10 minutes out. Checks: before unlock, `run-as` can't reach normal
+storage, but `run-as dev.susiee.dosekeeper cat
+/data/user_de/0/dev.susiee.dosekeeper/shared_prefs/<file>.xml` works; `/sdcard` doesn't
+exist yet (put `uiautomator dump` output in `/data/local/tmp`). Unlock headless: `input
+keyevent KEYCODE_WAKEUP`, swipe up, `input text <PIN>`, Enter; remove the PIN with
+`locksettings clear --old <PIN>`.
+**Not yet on a real phone.** ColorOS may not deliver `LOCKED_BOOT_COMPLETED` to an app that
+isn't allowed to auto-launch, like `BOOT_COMPLETED`.
 
 2026-11-09: **alarms stay armed with the app never opened, and follow time zone changes.**
 Before, alarms were armed only 3 days ahead and only when the app was open, so they stopped
@@ -171,7 +199,7 @@ ever read it** (`consumeNeedsReschedule` had no Dart caller) -- so after any res
 update, battery dying overnight and being recharged) *no dose alarms were armed* until
 the user happened to open the app. Never hit before because the phone never rebooted
 during a test. Fix: `AlarmScheduler` now keeps a native registry of every armed alarm
-(SharedPreferences `dosekeeper_armed_alarms`; added on schedule, removed on cancel and on
+(SharedPreferences `dosekeeper_armed_alarms`, device-protected since 2026-11-26; added on schedule, removed on cancel and on
 fire), and `BootReceiver` re-arms from it without Dart. A dose that came due while the
 phone was off still rings (10s after boot) if it's within the 2h missed-grace window.
 **Needs hardware verification:** with the app closed, `adb reboot`, unlock, and *without
