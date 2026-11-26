@@ -83,6 +83,46 @@ class AlarmRegistryTest {
         assertFalse(deviceRegistry().contains("13"))
     }
 
+    @Test fun firedEventsRemainUntilAcknowledgedAndNewerFiresArePreserved() {
+        val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
+        val key = "${AlarmReceiver.KEY_FIRED_PREFIX}21"
+        prefs.edit().putLong(key, 100L).commit()
+
+        assertEquals(listOf(mapOf("doseId" to 21L, "firedAt" to 100L)), FiredAlarmEvents.read(context))
+        assertEquals(100L, prefs.getLong(key, 0L)) // a sync can still fail to write SQLite
+
+        prefs.edit().putLong(key, 200L).commit() // the same dose fired again while the old row was processed
+        assertFalse(FiredAlarmEvents.ack(context, 21L, 100L))
+        assertEquals(200L, prefs.getLong(key, 0L))
+        assertTrue(FiredAlarmEvents.ack(context, 21L, 200L))
+        assertFalse(prefs.contains(key))
+    }
+
+    @Test fun firedEventsSurviveFailedMigrationAndReadTheEarliestCopyFirst() {
+        val key = "${AlarmReceiver.KEY_FIRED_PREFIX}22"
+        context.getSharedPreferences(BootReceiver.PREFS, 0).edit().clear().commit()
+        context.createDeviceProtectedStorageContext()
+            .getSharedPreferences(BootReceiver.PREFS, 0).edit().clear().commit()
+        context.getSharedPreferences(BootReceiver.PREFS, 0).edit().putLong(key, 100L).commit()
+        DeviceStorage.movePreferencesForTest = { _, _, _ -> false }
+        try {
+            DeviceStorage.prefs(context, BootReceiver.PREFS)
+        } finally {
+            DeviceStorage.movePreferencesForTest = null
+        }
+        DeviceStorage.prefs(context, BootReceiver.PREFS).edit().putLong(key, 200L).commit()
+
+        val devicePrefs = context.createDeviceProtectedStorageContext()
+            .getSharedPreferences(BootReceiver.PREFS, 0)
+        val credentialPrefs = context.getSharedPreferences(BootReceiver.PREFS, 0)
+        assertEquals(listOf(mapOf("doseId" to 22L, "firedAt" to 100L)), FiredAlarmEvents.read(context))
+        assertTrue(FiredAlarmEvents.ack(context, 22L, 100L))
+        assertFalse(credentialPrefs.contains(key))
+        assertEquals(200L, devicePrefs.getLong(key, 0L))
+        assertEquals(listOf(mapOf("doseId" to 22L, "firedAt" to 200L)), FiredAlarmEvents.read(context))
+        assertTrue(FiredAlarmEvents.ack(context, 22L, 200L))
+    }
+
     @Test fun rearmAfterRebootRingsLateDosesAndDropsMissedOnes() {
         val now = System.currentTimeMillis()
         AlarmScheduler.schedule(context, 1, now + 60_000, "Future", "")

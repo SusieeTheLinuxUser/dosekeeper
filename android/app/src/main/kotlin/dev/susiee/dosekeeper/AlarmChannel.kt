@@ -88,21 +88,18 @@ object AlarmChannel {
              * the distinction that makes a missed dose attributable instead of a
              * mystery.
              */
-            "drainFiredEvents" -> {
-                val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
-                val out = mutableListOf<Map<String, Any>>()
-                val editor = prefs.edit()
-                prefs.all.forEach { (key, value) ->
-                    if (key.startsWith(AlarmReceiver.KEY_FIRED_PREFIX)) {
-                        val doseId = key.removePrefix(AlarmReceiver.KEY_FIRED_PREFIX).toLongOrNull()
-                        if (doseId != null && value is Long) {
-                            out.add(mapOf("doseId" to doseId, "firedAt" to value))
-                            editor.remove(key)
-                        }
-                    }
-                }
-                editor.apply()
-                result.success(out)
+            "readFiredEvents" -> {
+                result.success(FiredAlarmEvents.read(context))
+            }
+
+            "ackFiredEvent" -> {
+                result.success(
+                    FiredAlarmEvents.ack(
+                        context,
+                        (call.argument<Number>("doseId")!!).toLong(),
+                        (call.argument<Number>("firedAt")!!).toLong(),
+                    ),
+                )
             }
 
             /** An overdue dose exists -- show/update the reminder. */
@@ -136,4 +133,38 @@ object AlarmChannel {
         }
         return true
     }
+}
+
+/** Fired records stay native until the database confirms each one was saved. */
+internal object FiredAlarmEvents {
+    fun read(context: Context): List<Map<String, Any>> {
+        val latest = mutableMapOf<Long, Long>()
+        copies(context).forEach { prefs ->
+            prefs.all.forEach { (key, value) ->
+                val doseId = key.removePrefix(AlarmReceiver.KEY_FIRED_PREFIX).toLongOrNull()
+                    ?.takeIf { key.startsWith(AlarmReceiver.KEY_FIRED_PREFIX) }
+                if (doseId != null && value is Long) {
+                    val previous = latest[doseId]
+                    if (previous == null || value < previous) latest[doseId] = value
+                }
+            }
+        }
+        return latest.map { (doseId, firedAt) -> mapOf("doseId" to doseId, "firedAt" to firedAt) }
+    }
+
+    fun ack(context: Context, doseId: Long, firedAt: Long): Boolean {
+        val key = "${AlarmReceiver.KEY_FIRED_PREFIX}$doseId"
+        var found = false
+        for (prefs in copies(context)) {
+            if (prefs.getLong(key, Long.MIN_VALUE) != firedAt) continue
+            found = true
+            if (!prefs.edit().remove(key).commit()) return false
+        }
+        return found
+    }
+
+    private fun copies(context: Context) = listOf(
+        DeviceStorage.prefs(context, BootReceiver.PREFS),
+        context.getSharedPreferences(BootReceiver.PREFS, Context.MODE_PRIVATE),
+    )
 }

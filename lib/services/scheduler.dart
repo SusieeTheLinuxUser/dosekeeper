@@ -72,9 +72,10 @@ class DoseScheduler {
   /// alarm never rang" (a real bug, worth fixing) versus "it rang and was ignored"
   /// (a human choice, not a bug) -- instead of the two looking identical in history.
   Future<void> _applyFiredAlarmEvents() async {
-    final events = await AlarmBridge.drainFiredEvents();
+    final events = await AlarmBridge.readFiredEvents();
     for (final event in events) {
       await _db.setDoseFiredAt(event.doseId, event.firedAt);
+      await AlarmBridge.ackFiredEvent(event);
     }
   }
 

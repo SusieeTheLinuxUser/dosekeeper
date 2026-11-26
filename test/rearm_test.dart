@@ -19,6 +19,8 @@ void main() {
   var scheduleCalls = 0;
   var pendingActions = <Map<String, dynamic>>[];
   var statusAtAck = <int, DoseStatus?>{}; // what the database held when acked
+  var firedEvents = <Map<String, dynamic>>[];
+  var firedAtWhenAck = <int, DateTime?>{};
 
   setUpAll(() async {
     sqfliteFfiInit();
@@ -53,8 +55,16 @@ void main() {
                 if (a['doseId'] != id || a['at'] != args['at']) a,
             ];
             return true;
-          case 'drainFiredEvents':
-            return [];
+          case 'readFiredEvents':
+            return firedEvents;
+          case 'ackFiredEvent':
+            final id = args['doseId'] as int;
+            firedAtWhenAck[id] = (await DoseDatabase.instance.dose(id))?.firedAt;
+            firedEvents = [
+              for (final e in firedEvents)
+                if (e['doseId'] != id || e['firedAt'] != args['firedAt']) e,
+            ];
+            return true;
           case 'outstandingDismissedThrough':
             return 0;
           default:
@@ -70,6 +80,8 @@ void main() {
     scheduleCalls = 0;
     pendingActions = [];
     statusAtAck = {};
+    firedEvents = [];
+    firedAtWhenAck = {};
     // DoseDatabase is a singleton; isolate tests by clearing its rows instead
     // of re-opening at a new path.
     final conn = await DoseDatabase.instance.database;
@@ -191,5 +203,31 @@ void main() {
     ];
     await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0));
     expect(pendingActions, isEmpty);
+  });
+
+  test('a fired event is saved before native storage is acknowledged', () async {
+    final medId = await addMed();
+    final id = await db.ensureDose(medId, DateTime(2026, 11, 9, 9, 0));
+    final firedAt = DateTime(2026, 11, 9, 9, 0, 2);
+    firedEvents = [
+      {'doseId': id, 'firedAt': ms(firedAt)},
+    ];
+
+    await scheduler.sync(now: DateTime(2026, 11, 9, 9, 1));
+
+    expect((await db.dose(id!))?.firedAt, firedAt);
+    expect(firedAtWhenAck[id], firedAt,
+        reason: 'if SQLite fails before this point, the native event must remain');
+    expect(firedEvents, isEmpty);
+  });
+
+  test('a fired event for a missing dose is acknowledged', () async {
+    firedEvents = [
+      {'doseId': 987654, 'firedAt': ms(DateTime(2026, 11, 9, 9, 0))},
+    ];
+
+    await scheduler.sync(now: DateTime(2026, 11, 9, 9, 1));
+
+    expect(firedEvents, isEmpty);
   });
 }
