@@ -25,6 +25,7 @@ object DeviceStorage {
     )
 
     internal val migrated = mutableSetOf<String>() // internal: tests start each case afresh
+    internal var movePreferencesForTest: ((Context, Context, String) -> Boolean)? = null
 
     @Synchronized
     fun prefs(context: Context, name: String): SharedPreferences {
@@ -46,7 +47,9 @@ object DeviceStorage {
                     migrated.add(n)
                     continue
                 }
-                if (!deviceContext.moveSharedPreferencesFrom(context, n)) {
+                val moved = movePreferencesForTest?.invoke(deviceContext, context, n)
+                    ?: deviceContext.moveSharedPreferencesFrom(context, n)
+                if (!moved) {
                     if (n == BootReceiver.PREFS) {
                         // Unlike the alarm registry and settings, this file can contain a
                         // user's Taken/Snooze action that Dart has not acknowledged yet.

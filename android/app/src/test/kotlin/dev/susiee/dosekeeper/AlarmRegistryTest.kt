@@ -131,17 +131,16 @@ class AlarmRegistryTest {
 
     @Test fun aFailedMoveCanNeverOverwriteNewerDataLater() {
         val de = context.createDeviceProtectedStorageContext()
-        de.getSharedPreferences(BootReceiver.PREFS, 0).edit().putString("pending_action_9", "TAKEN").commit()
-        context.getSharedPreferences(BootReceiver.PREFS, 0).edit().putString("stale", "x").commit()
-        val target = prefsFile(de, BootReceiver.PREFS)
-        // The copy fails, like on a full disk (it deletes the target first, hence the folder too).
-        target.setWritable(false); target.parentFile!!.setWritable(false)
+        context.getSharedPreferences(BootReceiver.PREFS, 0).edit()
+            .putString("pending_action_9", "TAKEN").putLong("pending_action_at_9", 123L)
+            .putString("stale", "x").commit()
+        DeviceStorage.movePreferencesForTest = { _, _, _ -> false }
         try {
             DeviceStorage.prefs(context, BootReceiver.PREFS)
         } finally {
-            target.parentFile!!.setWritable(true); target.setWritable(true)
+            DeviceStorage.movePreferencesForTest = null
         }
-        assertTrue(prefsFile(context, BootReceiver.PREFS).exists()) // pending action source retained
+        assertTrue(prefsFile(context, BootReceiver.PREFS).exists()) // source retained on failed move
         de.getSharedPreferences(BootReceiver.PREFS, 0).edit().putString("pending_action_10", "SNOOZE").commit()
 
         DeviceStorage.migrated.clear() // a new process
