@@ -33,8 +33,12 @@ the unlock is more than 2 h late (`LATE_RING_WINDOW_MS`). Fixing it means direct
 moving every prefs file they touch to device-protected storage
 (`createDeviceProtectedStorageContext()`, `moveSharedPreferencesFrom` for existing data),
 and skipping the Dart sync before unlock (the database is in credential storage). Only
-checkable on a device or emulator with a PIN: set one, `adb reboot`, don't unlock, then
-`adb shell dumpsys alarm | grep dev.susiee.dosekeeper` must list the alarms.
+checkable on a device or emulator with a PIN: set one, add a med due ~10 minutes ahead and
+note its alarm in `adb shell dumpsys alarm | grep -A3 dev.susiee.dosekeeper` (the dose
+alarm is the `ALARM_FIRE` one, not `DAILY_SYNC`, the safety net). `adb reboot`, don't
+unlock: that same dose alarm must be listed again, and the dose must **ring while still
+locked** (alarm screen over the lockscreen), since an armed alarm alone doesn't prove the
+receiver, service and screen run before unlock.
 
 2026-11-09: **alarms stay armed with the app never opened, and follow time zone changes.**
 Before, alarms were armed only 3 days ahead and only when the app was open, so they stopped
