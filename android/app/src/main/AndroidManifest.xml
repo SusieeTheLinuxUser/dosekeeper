@@ -48,6 +48,7 @@
              which is the whole point: a notification you can sleep through is useless. -->
         <activity
             android:name=".AlarmActivity"
+            android:directBootAware="true"
             android:exported="false"
             android:launchMode="singleInstance"
             android:excludeFromRecents="true"
@@ -57,6 +58,7 @@
 
         <receiver
             android:name=".AlarmReceiver"
+            android:directBootAware="true"
             android:exported="false" />
 
         <receiver
@@ -70,10 +72,13 @@
 
         <receiver
             android:name=".BootReceiver"
+            android:directBootAware="true"
             android:exported="true"
             android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- Re-arm from device-protected storage before the first unlock. -->
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <!-- Some OEM skins (incl. ColorOS) use non-standard boot broadcasts. -->
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
@@ -86,6 +91,7 @@
 
         <service
             android:name=".AlarmService"
+            android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:stopWithTask="false">

@@ -50,6 +50,11 @@ object BackgroundSync {
      */
     fun request(context: Context, pending: BroadcastReceiver.PendingResult? = null, delayMs: Long = 0) {
         val ctx = context.applicationContext
+        if (!DeviceStorage.isUnlocked(ctx)) {
+            Log.i(TAG, "skipping background sync until first unlock")
+            pending?.finish()
+            return
+        }
         if (pending != null) {
             pendings.add(pending)
             // TIME_SET/TIMEZONE_CHANGED are foreground broadcasts with a 10 s limit: never

@@ -107,9 +107,10 @@ object AlarmScheduler {
     // left NO alarms armed until the user happened to open the app: the 07:00 dose
     // would silently never ring. So every armed alarm is also recorded here, natively,
     // and BootReceiver re-arms them straight from this list without needing Dart.
+    // Device-protected (DeviceStorage), so that works before the first unlock too.
 
     private fun registry(context: Context) =
-        context.getSharedPreferences(REGISTRY, Context.MODE_PRIVATE)
+        DeviceStorage.prefs(context, REGISTRY)
 
     private fun remember(context: Context, doseId: Long, triggerAt: Long, medName: String, dosage: String) {
         val entry = JSONObject()

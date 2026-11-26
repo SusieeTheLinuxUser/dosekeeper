@@ -10,6 +10,13 @@ import android.util.Log
  * them natively from AlarmScheduler's own record of what was armed -- without waiting
  * for the user to open the app, which used to be the only time Dart ran.
  *
+ * Direct Boot: with a PIN set, nothing credential-encrypted is readable after a restart
+ * until the first unlock, so a phone that restarts overnight and stays locked used to ring
+ * nothing. LOCKED_BOOT_COMPLETED arrives before that unlock, and the registry lives in
+ * device-protected storage (DeviceStorage), so the re-arm happens then. BOOT_COMPLETED
+ * follows at unlock: it re-arms again (harmless, same alarms) and runs the Dart sync,
+ * which can only run unlocked.
+ *
  * Time/time-zone changes and the daily safety net arrive here too. Their alarms are
  * still armed (only the wall-clock meaning changed, or nothing changed), so they skip
  * the re-arm and only kick off a background Dart sync -- which re-materialises doses
@@ -28,6 +35,7 @@ class BootReceiver : BroadcastReceiver() {
             -> Unit // alarms are still armed; only Dart's picture needs refreshing
 
             Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_LOCKED_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             "android.intent.action.QUICKBOOT_POWERON",
             "com.htc.intent.action.QUICKBOOT_POWERON",
