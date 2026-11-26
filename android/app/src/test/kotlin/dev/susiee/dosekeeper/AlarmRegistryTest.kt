@@ -129,13 +129,21 @@ class AlarmRegistryTest {
         assertEquals("TAKEN", DeviceStorage.prefs(context, BootReceiver.PREFS).getString("pending_action_5", null))
     }
 
-    @Test fun aLaterProcessNeverMovesAnOldFileOverNewerData() {
-        DeviceStorage.prefs(context, BootReceiver.PREFS) // first run after the update: moved
-        DeviceStorage.prefs(context, BootReceiver.PREFS).edit().putString("pending_action_9", "TAKEN").commit()
-        // An old file left behind (a move that failed), then a new process.
+    @Test fun aFailedMoveCanNeverOverwriteNewerDataLater() {
+        val de = context.createDeviceProtectedStorageContext()
+        de.getSharedPreferences(BootReceiver.PREFS, 0).edit().putString("pending_action_9", "TAKEN").commit()
         context.getSharedPreferences(BootReceiver.PREFS, 0).edit().putString("stale", "x").commit()
-        DeviceStorage.migrated.clear()
+        val target = prefsFile(de, BootReceiver.PREFS)
+        // The copy fails, like on a full disk (it deletes the target first, hence the folder too).
+        target.setWritable(false); target.parentFile!!.setWritable(false)
+        try {
+            DeviceStorage.prefs(context, BootReceiver.PREFS)
+        } finally {
+            target.parentFile!!.setWritable(true); target.setWritable(true)
+        }
+        assertFalse(prefsFile(context, BootReceiver.PREFS).exists()) // dropped, so nothing to move later
 
+        DeviceStorage.migrated.clear() // a new process
         val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
 
         assertEquals("TAKEN", prefs.getString("pending_action_9", null))
