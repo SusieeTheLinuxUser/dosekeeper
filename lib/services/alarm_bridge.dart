@@ -150,12 +150,19 @@ class AlarmBridge {
   /// a missed dose attributable: "the alarm never rang" versus "it rang and was
   /// ignored" are very different findings, and without this there's no way to tell
   /// them apart after the fact.
-  static Future<List<FiredAlarmEvent>> drainFiredEvents() async {
-    final raw = await _channel.invokeMethod<List<dynamic>>('drainFiredEvents');
+  static Future<List<FiredAlarmEvent>> readFiredEvents() async {
+    final raw = await _channel.invokeMethod<List<dynamic>>('readFiredEvents');
     return (raw ?? [])
         .map((e) => FiredAlarmEvent.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
+
+  /// Removes a fire record only after SQLite stored the same event timestamp.
+  static Future<void> ackFiredEvent(FiredAlarmEvent event) =>
+      _channel.invokeMethod('ackFiredEvent', {
+        'doseId': event.doseId,
+        'firedAt': event.firedAt.millisecondsSinceEpoch,
+      });
 }
 
 class PendingAlarmAction {

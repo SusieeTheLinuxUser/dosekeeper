@@ -19,6 +19,15 @@ feature. Do not trade it away for elegance or convenience.
 
 ## Current state (2026-11-04)
 
+2026-11-26: **alarm-fired evidence is acknowledged only after SQLite stores it.** The
+background/foreground sync reads native `fired_at_<dose id>` records, stores them in
+`doses.fired_at`, then acknowledges the same timestamp. If a sync dies or SQLite fails
+before the write, the native event remains for the next sync. It reads both the
+device-protected and retained credential-protected preference copies, so a failed
+migration cannot hide an older event. A newer firing cannot be erased by acknowledging
+an older event; records for doses removed before sync are acknowledged too. Covered by
+the `firedEvents*` tests in `AlarmRegistryTest` and `rearm_test.dart`.
+
 2026-11-26: **alarms come back after a restart before the phone is unlocked (Direct Boot).**
 The gap (found in a read-only bug hunt, PR #45): with a PIN/pattern set, an app that isn't
 direct-boot-aware can't run until the first unlock, and its normal (credential-encrypted)
@@ -439,8 +448,8 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
   with the user adding a real medication and looking like the add flow itself was
   ringing alarms. It wasn't (verified via the on-device DB) — but an unconfirmed,
   always-visible "fire a real alarm" button was a real foot-gun regardless.
-- **`doses.fired_at` tracking** (`AlarmReceiver.kt`, `MainActivity.drainFiredEvents`,
-  `AlarmBridge.drainFiredEvents`, `DoseScheduler._applyFiredAlarmEvents`) — records the
+- **`doses.fired_at` tracking** (`AlarmReceiver.kt`, `AlarmChannel` read/ack methods,
+  `AlarmBridge.readFiredEvents`, `DoseScheduler._applyFiredAlarmEvents`) — records the
   instant the OS delivers the alarm broadcast, independent of the user's response. See
   "Prior state (2026-09-20)" for the full story and the on-device verification. This is what
   made the overnight test conclusive instead of another "who knows" — proved the morning
