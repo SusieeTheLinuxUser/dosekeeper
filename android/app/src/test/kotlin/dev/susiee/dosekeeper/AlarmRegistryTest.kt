@@ -129,6 +129,19 @@ class AlarmRegistryTest {
         assertEquals("TAKEN", DeviceStorage.prefs(context, BootReceiver.PREFS).getString("pending_action_5", null))
     }
 
+    @Test fun aLaterProcessNeverMovesAnOldFileOverNewerData() {
+        DeviceStorage.prefs(context, BootReceiver.PREFS) // first run after the update: moved
+        DeviceStorage.prefs(context, BootReceiver.PREFS).edit().putString("pending_action_9", "TAKEN").commit()
+        // An old file left behind (a move that failed), then a new process.
+        context.getSharedPreferences(BootReceiver.PREFS, 0).edit().putString("stale", "x").commit()
+        DeviceStorage.migrated.clear()
+
+        val prefs = DeviceStorage.prefs(context, BootReceiver.PREFS)
+
+        assertEquals("TAKEN", prefs.getString("pending_action_9", null))
+        assertFalse(prefs.contains("stale"))
+    }
+
     @Test fun noMigrationWhileLocked() {
         val name = "migration_locked_test_prefs"
         context.getSharedPreferences(name, 0).edit().putString("k", "v").commit()

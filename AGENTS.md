@@ -32,8 +32,10 @@ The fix:
   runs the Dart sync. `MainActivity`, the missed-dose receivers and the app stay unaware.
 - `DeviceStorage.kt`: every native prefs file the alarm path touches lives in
   device-protected storage (readable before unlock). The first access while unlocked moves
-  all four over from the old location (`moveSharedPreferencesFrom`), together, so an old file
-  can't later overwrite what was written while locked. On an update that happens at
+  all four over from the old location (`moveSharedPreferencesFrom`), together, and each only
+  ever once (marker file `dosekeeper_storage_moved`): a move copies the old file over the new
+  one, so a later or retried move would overwrite what was written since (CodeRabbit, PR #46).
+  A failed move (disk full) strands the old file: the next sync re-records the alarms. On an update that happens at
   `MY_PACKAGE_REPLACED`, seen on the emulator.
 - **What's readable before unlock** (privacy): `dosekeeper_armed_alarms` (dose id -> time,
   medication name, dosage: the alarm label, for the next 3 days), `dosekeeper_native` (dose
