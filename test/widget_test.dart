@@ -381,6 +381,23 @@ void main() {
       expect(tile.label, contains('Taken'));
       handle.dispose();
     });
+
+    testWidgets('the day chips read as full day names', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(const MaterialApp(home: MedicationEditPage()));
+      await tester.pump();
+
+      expect(
+        tester.getSemantics(find.widgetWithText(ChoiceChip, 'M')).label,
+        'Mon',
+      );
+      // The two single-letter "T" chips must be told apart by a screen reader.
+      final tuesdays = find.widgetWithText(ChoiceChip, 'T');
+      expect(tuesdays, findsNWidgets(2));
+      expect(tester.getSemantics(tuesdays.first).label, 'Tue');
+      expect(tester.getSemantics(tuesdays.last).label, 'Thu');
+      handle.dispose();
+    });
   });
 
   testWidgets('Google backup starts off, and the switch saves the choice', (tester) async {
