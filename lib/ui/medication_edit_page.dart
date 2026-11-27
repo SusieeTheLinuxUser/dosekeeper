@@ -75,11 +75,18 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
   @override
   Widget build(BuildContext context) {
     const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    // One letter reads ambiguously ("T", "T", "S", "S") to a screen reader; it
+    // gets the full names the medication list uses instead.
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.existing == null ? 'Add medication' : 'Edit medication'),
         actions: [
-          IconButton(onPressed: _save, icon: const Icon(Icons.check)),
+          IconButton(
+            tooltip: 'Save medication',
+            onPressed: _save,
+            icon: const Icon(Icons.check),
+          ),
         ],
       ),
       body: Form(
@@ -148,7 +155,8 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
                 children: [
                   for (var d = 1; d <= 7; d++)
                     ChoiceChip(
-                      label: Text(dayLabels[d - 1]),
+                      label: Text(dayLabels[d - 1],
+                          semanticsLabel: dayNames[d - 1]),
                       selected: _days.contains(d),
                       onSelected: (sel) => setState(() {
                         sel ? _days.add(d) : _days.remove(d);
