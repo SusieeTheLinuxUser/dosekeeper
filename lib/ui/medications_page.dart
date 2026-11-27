@@ -90,6 +90,7 @@ class MedicationsPageState extends State<MedicationsPage> {
                     subtitle: Text(_describe(med)),
                     onTap: () => _openEditor(med),
                     trailing: IconButton(
+                      tooltip: 'Delete medication',
                       icon: const Icon(Icons.delete_outline),
                       onPressed: () => _delete(med),
                     ),

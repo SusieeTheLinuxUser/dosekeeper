@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:dosekeeper/data/database.dart';
 import 'package:dosekeeper/models/medication.dart';
 import 'package:dosekeeper/services/alarm_bridge.dart';
 import 'package:dosekeeper/services/scheduler.dart';
@@ -9,6 +13,7 @@ import 'package:dosekeeper/ui/adherence_grid.dart';
 import 'package:dosekeeper/ui/backup_page.dart';
 import 'package:dosekeeper/ui/info_page.dart';
 import 'package:dosekeeper/ui/medication_edit_page.dart';
+import 'package:dosekeeper/ui/medications_page.dart';
 
 void main() {
   group('Medication', () {
@@ -293,5 +298,51 @@ void main() {
     );
     expect(find.text('Notes (optional)'), findsOneWidget);
     expect(notesField.controller?.text, 'Take with food');
+  });
+
+  group('screen-reader labels', () {
+    setUpAll(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+      // Temp databases path, so nothing touches a real one (same as rearm_test).
+      await databaseFactory.setDatabasesPath(
+          (await Directory.systemTemp.createTemp('dosekeeper_a11y_test')).path);
+    });
+
+    setUp(() async {
+      // DoseDatabase is a singleton; isolate tests by clearing its rows.
+      final conn = await DoseDatabase.instance.database;
+      await conn.delete('doses');
+      await conn.delete('medications');
+    });
+
+    testWidgets('the delete button on a medication card is labelled',
+        (tester) async {
+      // runAsync: real database work can't progress inside the test's fake clock.
+      await tester.runAsync(() => DoseDatabase.instance.upsertMedication(
+          const Medication(
+            name: 'Sertraline',
+            timesOfDay: [540],
+            daysOfWeek: Medication.everyDay,
+          )));
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(home: MedicationsPage(scheduler: DoseScheduler())),
+      );
+      // The page loads its list from the database on the real event loop; give
+      // it a turn, then let the fake clock apply the loaded state.
+      await tester
+          .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+
+      expect(find.byType(IconButton), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(IconButton)).tooltip,
+        'Delete medication',
+      );
+      expect(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
   });
 }
