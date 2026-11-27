@@ -344,5 +344,20 @@ void main() {
       expect(tester, meetsGuideline(labeledTapTargetGuideline));
       handle.dispose();
     });
+
+    testWidgets('the save button on the medication editor is labelled',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(const MaterialApp(home: MedicationEditPage()));
+      await tester.pump();
+
+      expect(find.byType(IconButton), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(IconButton)).tooltip,
+        'Save medication',
+      );
+      expect(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
   });
 }

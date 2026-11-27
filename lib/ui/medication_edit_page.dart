@@ -79,7 +79,11 @@ class _MedicationEditPageState extends State<MedicationEditPage> {
       appBar: AppBar(
         title: Text(widget.existing == null ? 'Add medication' : 'Edit medication'),
         actions: [
-          IconButton(onPressed: _save, icon: const Icon(Icons.check)),
+          IconButton(
+            tooltip: 'Save medication',
+            onPressed: _save,
+            icon: const Icon(Icons.check),
+          ),
         ],
       ),
       body: Form(
