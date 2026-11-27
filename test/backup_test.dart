@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dosekeeper/models/medication.dart';
 import 'package:dosekeeper/services/backup_format.dart';
+import 'package:dosekeeper/services/backup_service.dart';
 
 void main() {
   final morning = DateTime(2026, 9, 21, 7);
@@ -91,6 +92,80 @@ void main() {
 
     test('rejects a file that is not JSON', () {
       expect(() => Backup.decode('hello'), throwsFormatException);
+    });
+
+    test('rejects a top-level JSON array', () {
+      expect(() => Backup.decode('[1, 2]'), throwsFormatException);
+    });
+
+    test('an export round-trips through a restore without changing anything', () {
+      final first = sample().encode();
+
+      final restored = Backup.decode(first);
+
+      expect(restored.encode(), first,
+          reason: 'decode(encode(x)) must re-encode byte-for-byte');
+    });
+
+    test('reads a half-hour offset as the same instant, both ways', () {
+      final t = Backup.parseTimestamp('2026-09-21T07:00:00+05:30');
+      expect(t.isAtSameMomentAs(DateTime.utc(2026, 9, 21, 1, 30)), isTrue);
+
+      final restored = Backup.decode(Backup(
+        exportedAt: t,
+        medications: const [],
+        doses: const [],
+      ).encode());
+      expect(restored.exportedAt.isAtSameMomentAs(t), isTrue,
+          reason: 'a +05:30 offset must survive encode -> decode');
+    });
+
+    test('reads a UTC (Z) timestamp as the same instant', () {
+      final t = Backup.parseTimestamp('2026-09-21T07:00:00Z');
+
+      expect(t.isAtSameMomentAs(DateTime.utc(2026, 9, 21, 7)), isTrue);
+    });
+
+    test('rejects two medications sharing an id', () {
+      expect(
+        () => Backup.decode(tampered((j) {
+          final meds = j['medications'] as List<dynamic>;
+          (meds[1] as Map<String, dynamic>)['id'] =
+              (meds[0] as Map<String, dynamic>)['id'];
+        })),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects weekdays 0 and 8', () {
+      for (final bad in [0, 8]) {
+        expect(
+          () => Backup.decode(tampered(
+              (j) => (j['medications'] as List).first['days'] = [bad])),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('rejects a dose with an unparseable timestamp', () {
+      expect(
+        () => Backup.decode(tampered(
+            (j) => (j['doses'] as List).first['scheduledAt'] = 'not-a-time')),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects boundary times 24:00 and 09:60', () {
+      expect(
+        () => Backup.decode(
+            tampered((j) => (j['medications'] as List).first['times'] = ['24:00'])),
+        throwsFormatException,
+      );
+      expect(
+        () => Backup.decode(
+            tampered((j) => (j['medications'] as List).first['times'] = ['09:60'])),
+        throwsFormatException,
+      );
     });
 
     test('rejects JSON that is not a DoseKeeper backup', () {
@@ -220,6 +295,35 @@ void main() {
 
     test('prunes nothing while under the limit', () {
       expect(Backup.toPrune(['dosekeeper-backup-2026-09-24.json'], keep: 14), isEmpty);
+    });
+
+    test('prunes nothing when exactly keep files exist', () {
+      final names = [
+        for (var day = 1; day <= 14; day++) Backup.fileNameFor(DateTime(2026, 9, day)),
+      ];
+
+      expect(Backup.toPrune(names, keep: BackupService.keepDays), isEmpty);
+    });
+
+    test('sorts newest first across a year boundary', () {
+      expect(
+        Backup.newestFirst([
+          'dosekeeper-backup-2026-01-05.json',
+          'dosekeeper-backup-2025-12-31.json',
+        ]),
+        [
+          'dosekeeper-backup-2026-01-05.json',
+          'dosekeeper-backup-2025-12-31.json',
+        ],
+      );
+    });
+
+    test('a file name round-trips through fileNameFor and dayOf', () {
+      final name = Backup.fileNameFor(DateTime(2026, 12, 31, 23, 59));
+
+      expect(name, 'dosekeeper-backup-2026-12-31.json');
+      expect(Backup.dayOf(name), '2026-12-31');
+      expect(Backup.isBackupFileName(name), isTrue);
     });
   });
 }
