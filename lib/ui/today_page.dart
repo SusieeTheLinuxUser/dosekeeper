@@ -255,10 +255,20 @@ class _DoseTile extends StatelessWidget {
       DoseStatus.pending => (Colors.blueGrey, Icons.schedule),
     };
 
+    // The status is otherwise shown only by the icon's shape and colour, which
+    // TalkBack reads as nothing; with a word on the icon, the tile reads the
+    // medicine, the time and the status together.
+    final statusLabel = switch (status) {
+      DoseStatus.taken => 'Taken',
+      DoseStatus.skipped => 'Skipped',
+      DoseStatus.missed => 'Missed',
+      DoseStatus.pending => 'Upcoming',
+    };
+
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        leading: Icon(icon, color: color, size: 30),
+        leading: Icon(icon, color: color, size: 30, semanticLabel: statusLabel),
         title: Text(
           med.dosage.isEmpty ? med.name : '${med.name}  ·  ${med.dosage}',
           style: TextStyle(

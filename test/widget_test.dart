@@ -14,6 +14,7 @@ import 'package:dosekeeper/ui/backup_page.dart';
 import 'package:dosekeeper/ui/info_page.dart';
 import 'package:dosekeeper/ui/medication_edit_page.dart';
 import 'package:dosekeeper/ui/medications_page.dart';
+import 'package:dosekeeper/ui/today_page.dart';
 
 void main() {
   group('Medication', () {
@@ -258,6 +259,130 @@ void main() {
     expect(InfoPage.easterEgg(0.5), 'But nobody came...');
   });
 
+  // These must stay above the Google backup test below: BackupService is a
+  // singleton whose serial-run guard starts as a Future.value() created in
+  // whatever zone first touches it. A future created in one widget test's fake
+  // clock never fires listeners registered in a later test's clock (its zone is
+  // dead by then), so if BackupPage is pumped first, every later TodayPage
+  // refresh hangs forever in BackupService.backUpQuietly. This group's
+  // "a dose tile reads..." test is the first caller, in its own zone.
+  group('screen-reader labels', () {
+    setUpAll(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+      // Temp databases path, so nothing touches a real one (same as rearm_test).
+      await databaseFactory.setDatabasesPath(
+          (await Directory.systemTemp.createTemp('dosekeeper_a11y_test')).path);
+    });
+
+    setUp(() async {
+      // DoseDatabase is a singleton; isolate tests by clearing its rows.
+      final conn = await DoseDatabase.instance.database;
+      await conn.delete('doses');
+      await conn.delete('medications');
+    });
+
+    testWidgets('the delete button on a medication card is labelled',
+        (tester) async {
+      // runAsync: real database work can't progress inside the test's fake clock.
+      await tester.runAsync(() => DoseDatabase.instance.upsertMedication(
+          const Medication(
+            name: 'Sertraline',
+            timesOfDay: [540],
+            daysOfWeek: Medication.everyDay,
+          )));
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(home: MedicationsPage(scheduler: DoseScheduler())),
+      );
+      // The page loads its list from the database on the real event loop;
+      // alternate real turns and fake-clock pumps until the card renders.
+      for (var i = 0; i < 50 && find.byType(IconButton).evaluate().isEmpty; i++) {
+        await tester
+            .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump();
+      }
+
+      expect(find.byType(IconButton), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(IconButton)).tooltip,
+        'Delete medication',
+      );
+      expect(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
+
+    testWidgets('the save button on the medication editor is labelled',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(const MaterialApp(home: MedicationEditPage()));
+      await tester.pump();
+
+      expect(find.byType(IconButton), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(IconButton)).tooltip,
+        'Save medication',
+      );
+      expect(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
+
+    testWidgets('a dose tile reads the medicine, time and status together',
+        (tester) async {
+      // Everything refresh() touches outside the database is faked: the alarm
+      // path answers "fine" so no warning card shows, and backups report a
+      // folder so backups are on.
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('dev.susiee.dosekeeper/alarms'),
+        (call) async => switch (call.method) {
+              'scheduleDose' => true,
+              'readPendingActions' => <Object?>[],
+              'readFiredEvents' => <Object?>[],
+              'outstandingDismissedThrough' => 0,
+              'canScheduleExact' => true,
+              'isIgnoringBatteryOptimizations' => true,
+              'hasNotificationPermission' => true,
+              'canUseFullScreenIntent' => true,
+              'isBatteryLow' => false,
+              'backupStatus' => <String, Object?>{'folderName': 'Backups'},
+              _ => null,
+            },
+      );
+      final handle = tester.ensureSemantics();
+      // A dose marked taken: its tile shows the taken state no matter what
+      // time the test runs at.
+      await tester.runAsync(() async {
+        final medId = await DoseDatabase.instance.upsertMedication(const Medication(
+          name: 'Sertraline',
+          timesOfDay: [540],
+          daysOfWeek: Medication.everyDay,
+        ));
+        final now = DateTime.now();
+        final doseId = await DoseDatabase.instance
+            .ensureDose(medId, DateTime(now.year, now.month, now.day, 9));
+        await DoseDatabase.instance.setDoseStatus(doseId!, DoseStatus.taken);
+      });
+      await tester.pumpWidget(
+          MaterialApp(home: TodayPage(scheduler: DoseScheduler())));
+      // The page syncs and loads from the database on the real event loop;
+      // alternate real turns and fake-clock pumps until the dose tile renders.
+      // sync() is a long sequential await chain, so allow many cycles.
+      for (var i = 0; i < 400 && find.byType(ListTile).evaluate().isEmpty; i++) {
+        await tester
+            .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump();
+      }
+
+      expect(find.byType(ListTile), findsOneWidget);
+      final tile = tester.getSemantics(find.byType(ListTile));
+      expect(tile.label, contains('Sertraline'));
+      expect(tile.label, contains('09:00'));
+      expect(tile.label, contains('Taken'));
+      handle.dispose();
+    });
+  });
+
   testWidgets('Google backup starts off, and the switch saves the choice', (tester) async {
     final saved = <Object?>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -298,66 +423,5 @@ void main() {
     );
     expect(find.text('Notes (optional)'), findsOneWidget);
     expect(notesField.controller?.text, 'Take with food');
-  });
-
-  group('screen-reader labels', () {
-    setUpAll(() async {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-      // Temp databases path, so nothing touches a real one (same as rearm_test).
-      await databaseFactory.setDatabasesPath(
-          (await Directory.systemTemp.createTemp('dosekeeper_a11y_test')).path);
-    });
-
-    setUp(() async {
-      // DoseDatabase is a singleton; isolate tests by clearing its rows.
-      final conn = await DoseDatabase.instance.database;
-      await conn.delete('doses');
-      await conn.delete('medications');
-    });
-
-    testWidgets('the delete button on a medication card is labelled',
-        (tester) async {
-      // runAsync: real database work can't progress inside the test's fake clock.
-      await tester.runAsync(() => DoseDatabase.instance.upsertMedication(
-          const Medication(
-            name: 'Sertraline',
-            timesOfDay: [540],
-            daysOfWeek: Medication.everyDay,
-          )));
-      final handle = tester.ensureSemantics();
-      await tester.pumpWidget(
-        MaterialApp(home: MedicationsPage(scheduler: DoseScheduler())),
-      );
-      // The page loads its list from the database on the real event loop; give
-      // it a turn, then let the fake clock apply the loaded state.
-      await tester
-          .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-
-      expect(find.byType(IconButton), findsOneWidget);
-      expect(
-        tester.getSemantics(find.byType(IconButton)).tooltip,
-        'Delete medication',
-      );
-      expect(tester, meetsGuideline(labeledTapTargetGuideline));
-      handle.dispose();
-    });
-
-    testWidgets('the save button on the medication editor is labelled',
-        (tester) async {
-      final handle = tester.ensureSemantics();
-      await tester.pumpWidget(const MaterialApp(home: MedicationEditPage()));
-      await tester.pump();
-
-      expect(find.byType(IconButton), findsOneWidget);
-      expect(
-        tester.getSemantics(find.byType(IconButton)).tooltip,
-        'Save medication',
-      );
-      expect(tester, meetsGuideline(labeledTapTargetGuideline));
-      handle.dispose();
-    });
   });
 }
