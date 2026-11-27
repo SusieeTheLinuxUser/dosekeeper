@@ -82,6 +82,11 @@ class Backup {
         'This backup was made by a newer version of DoseKeeper. Update the app first.',
       );
     }
+    // Only 1..formatVersion is a real DoseKeeper backup; 0 or negative is damage,
+    // not an older app's file (version 1 was the first format ever written).
+    if (format < 1) {
+      throw FormatException('This backup file is damaged: unknown format $format.');
+    }
 
     try {
       final meds = [

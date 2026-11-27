@@ -180,6 +180,16 @@ void main() {
       );
     });
 
+    test('rejects format 0 and negative formats, not just newer ones', () {
+      for (final bad in [0, -1]) {
+        expect(
+          () => Backup.decode(tampered((j) => j['format'] = bad)),
+          throwsFormatException,
+          reason: 'format $bad must be rejected, not restored as if current',
+        );
+      }
+    });
+
     test('rejects a dose pointing at a medication the file does not contain', () {
       expect(
         () => Backup.decode(tampered((j) => (j['doses'] as List).first['medicationId'] = 99)),
