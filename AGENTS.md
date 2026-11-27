@@ -27,7 +27,7 @@ device-protected and retained credential-protected preference copies, so a faile
 migration cannot hide an older event. When copies disagree, the earlier firing is saved
 first and the later one remains for the next sync; records for doses removed before sync
 are acknowledged too. Covered by
-the `firedEvents*` tests in `AlarmRegistryTest` and `rearm_test.dart`.
+the `firedEvents*` tests in `AlarmRegistryTest` and the "a fired event …" tests in `rearm_test.dart`.
 
 2026-11-26: **alarms come back after a restart before the phone is unlocked (Direct Boot).**
 The gap (found in a read-only bug hunt, PR #45): with a PIN/pattern set, an app that isn't
@@ -570,7 +570,7 @@ the user's phone. `master` is branch-protected — see "Git workflow" below.
 
 ### Not implemented yet
 
-1. Dose history screen; editing/pausing a med without deleting it.
+1. Dose history screen; pausing a med without deleting it (editing medications already exists; the `active` flag is not exposed in the editor).
 
 ### Future feature ideas (not prioritized, not committed to)
 
@@ -673,7 +673,7 @@ done; what's next is judgment, not a fixed checklist:
 
 - Update this file after any meaningful chunk of work — the user moves between Claude,
   ChatGPT/Codex, Qwen, Kimi and Z.ai, and this file is the only handoff.
-- Non-trivial logic gets a test (`test/widget_test.dart` covers the scheduling maths).
+- Non-trivial logic gets a test (`test/rearm_test.dart` and `test/dst_test.dart` cover scheduling and date calculations).
 - Keep the native alarm layer commented with *why*, not what — the "why" is what stops
   a future contributor refactoring the reliability out of it.
 - **No session links anywhere on GitHub** (user's rule, 2026-09-24): no
