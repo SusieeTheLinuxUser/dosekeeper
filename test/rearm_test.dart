@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dosekeeper/data/database.dart';
 import 'package:dosekeeper/models/medication.dart';
+import 'package:dosekeeper/services/backup_format.dart';
 import 'package:dosekeeper/services/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -229,5 +230,204 @@ void main() {
     await scheduler.sync(now: DateTime(2026, 11, 9, 9, 1));
 
     expect(firedEvents, isEmpty);
+  });
+
+  Future<List<DateTime>> pendingTimes(DateTime from, DateTime to) async =>
+      (await db.dosesBetween(from, to))
+          .where((d) => d.status == DoseStatus.pending)
+          .map((d) => d.scheduledAt)
+          .toList();
+
+  test('doses are materialised and armed across a month end', () async {
+    await addMed(); // 09:00 daily
+    // Days 0..3 from Jan 30 are Jan 30, 31, Feb 1, Feb 2.
+    await scheduler.sync(now: DateTime(2026, 1, 30, 10, 0));
+
+    expect(
+      await pendingTimes(DateTime(2026, 1, 30), DateTime(2026, 2, 3)),
+      [DateTime(2026, 1, 30, 9, 0), DateTime(2026, 1, 31, 9, 0),
+          DateTime(2026, 2, 1, 9, 0), DateTime(2026, 2, 2, 9, 0)],
+    );
+    // Jan 30 09:00 was back-filled one hour into the past (it never had an
+    // alarm), so only the three future days get alarms.
+    for (final day in [DateTime(2026, 1, 31), DateTime(2026, 2, 1), DateTime(2026, 2, 2)]) {
+      expect(armed.containsValue(ms(day.add(const Duration(hours: 9)))), isTrue,
+          reason: '${day.toIso8601String()} 09:00 must be armed');
+    }
+    expect(armed.containsValue(ms(DateTime(2026, 1, 30, 9, 0))), isFalse,
+        reason: 'a back-filled past dose is never armed');
+  });
+
+  test('the leap day itself is materialised', () async {
+    await addMed();
+    // Days 0..3 from Feb 27 2028 (a leap year) are Feb 27, 28, 29, Mar 1.
+    await scheduler.sync(now: DateTime(2028, 2, 27, 10, 0));
+
+    expect(
+      await pendingTimes(DateTime(2028, 2, 27), DateTime(2028, 3, 2)),
+      [DateTime(2028, 2, 27, 9, 0), DateTime(2028, 2, 28, 9, 0),
+          DateTime(2028, 2, 29, 9, 0), DateTime(2028, 3, 1, 9, 0)],
+    );
+  });
+
+  test('a Monday-only med gets doses only on Mondays', () async {
+    await addMed(daysOfWeek: {1}); // Mondays
+    // Friday Nov 6 .. Monday Nov 9 (day offset 3).
+    await scheduler.sync(now: DateTime(2026, 11, 6, 12, 0));
+
+    expect(await pendingTimes(DateTime(2026, 11, 6), DateTime(2026, 11, 10)),
+        [DateTime(2026, 11, 9, 9, 0)],
+        reason: 'only Monday Nov 9 is on the schedule');
+    expect(armed.containsValue(ms(DateTime(2026, 11, 9, 9, 0))), isTrue);
+  });
+
+  test('the last materialised evening is created but armed a day later', () async {
+    await addMed(timesOfDay: [1410]); // 23:30
+    // Window [Nov 9 00:30, Nov 12 00:30): Nov 12's 23:30 is materialised
+    // (day offset 3) but lies beyond it, so it must not be armed yet.
+    await scheduler.sync(now: DateTime(2026, 11, 9, 0, 30));
+    final late = await db.dosesBetween(DateTime(2026, 11, 12), DateTime(2026, 11, 13));
+    expect(late, hasLength(1));
+    expect(armed.containsKey(late.single.id), isFalse);
+
+    await scheduler.sync(now: DateTime(2026, 11, 10, 0, 30));
+    expect(armed.containsKey(late.single.id), isTrue,
+        reason: 'a day later it is inside the window and must be armed');
+  });
+
+  test('a med added now gets a dose for a time 1h ago, but not one 13h ago', () async {
+    await addMed(timesOfDay: [480, 960]); // 08:00, 16:00
+    await scheduler.sync(now: DateTime(2026, 11, 9, 21, 0));
+
+    expect(await pendingTimes(DateTime(2026, 11, 9), DateTime(2026, 11, 10)),
+        [DateTime(2026, 11, 9, 16, 0)],
+        reason: 'the 12h back-fill covers 16:00 (5h ago), not 08:00 (13h ago)');
+  });
+
+  test('editing a time out of a med cancels its armed alarm and deletes the dose',
+      () async {
+    final medId = await addMed(timesOfDay: [540, 600]); // 09:00, 10:00
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0));
+    final removed = (await db.dosesBetween(DateTime(2026, 11, 10), DateTime(2026, 11, 11)))
+        .firstWhere((d) => d.scheduledAt.hour == 10);
+    expect(armed.containsKey(removed.id), isTrue, reason: 'precondition: it was armed');
+
+    await db.upsertMedication(Medication(
+        id: medId, name: 'Test med', timesOfDay: [540], daysOfWeek: Medication.everyDay));
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 30));
+
+    expect(cancelled, contains(removed.id));
+    expect(await db.dose(removed.id!), isNull, reason: 'the orphaned dose row is deleted');
+    expect(armed.containsKey(removed.id), isFalse);
+    expect(armed.containsValue(ms(DateTime(2026, 11, 10, 9, 0))), isTrue,
+        reason: 'the kept 09:00 dose stays armed');
+  });
+
+  test('deleting a med cancels its still-armed alarms', () async {
+    final medId = await addMed();
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0));
+    expect(armed, isNotEmpty, reason: 'precondition: its doses were armed');
+
+    await db.deleteMedication(medId);
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 30));
+
+    expect(armed, isEmpty, reason: 'every armed alarm belonged to the deleted med');
+    // Doses past [now, now + 3 days) (here Nov 12 09:00, 30 min beyond the
+    // window) were never armed and go with the next sync's window slide.
+    expect(await pendingTimes(DateTime(2026, 11, 9), DateTime(2026, 11, 12, 8, 30)),
+        isEmpty, reason: 'its future pending doses inside the window are gone');
+  });
+
+  test('restore cancels old alarms, lands the backup, and arms the restored schedule',
+      () async {
+    await addMed(); // 09:00 daily
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0));
+    final oldIds = List<int>.of(armed.keys);
+    expect(oldIds, isNotEmpty, reason: 'precondition: the old schedule was armed');
+
+    final backup = Backup(
+      exportedAt: DateTime(2026, 11, 9, 8, 0),
+      medications: const [
+        Medication(id: 1, name: 'Restored', timesOfDay: [600], daysOfWeek: Medication.everyDay),
+      ],
+      doses: [
+        Dose(
+          medicationId: 1,
+          scheduledAt: DateTime(2026, 11, 8, 10, 0),
+          status: DoseStatus.taken,
+          actionedAt: DateTime(2026, 11, 8, 10, 5),
+        ),
+      ],
+    );
+    await scheduler.restore(backup, now: DateTime(2026, 11, 9, 8, 30));
+
+    expect(cancelled, containsAll(oldIds), reason: 'old alarms must not survive');
+    expect(armed.containsValue(ms(DateTime(2026, 11, 9, 9, 0))), isFalse,
+        reason: 'the old 09:00 schedule is gone');
+    expect(armed.containsValue(ms(DateTime(2026, 11, 10, 10, 0))), isTrue,
+        reason: 'the restored 10:00 schedule is armed');
+    expect((await db.medications()).single.name, 'Restored');
+    final history = await db.allDoses();
+    expect(history.where((d) => d.status == DoseStatus.taken), hasLength(1),
+        reason: 'the backup dose history is kept');
+  });
+
+  test('time-window queries are half-open: from inclusive, to exclusive', () async {
+    final medId = await addMed();
+    final id = await db.ensureDose(medId, DateTime(2026, 11, 9, 9, 0));
+
+    expect((await db.dosesBetween(DateTime(2026, 11, 9, 9, 0), DateTime(2026, 11, 9, 9, 1)))
+        .map((d) => d.id), [id], reason: 'scheduled == from is included');
+    expect(await db.dosesBetween(DateTime(2026, 11, 9, 8, 0), DateTime(2026, 11, 9, 9, 0)),
+        isEmpty, reason: 'scheduled == to is excluded');
+    expect(await db.pendingDosesBefore(DateTime(2026, 11, 9, 9, 0)), isEmpty,
+        reason: 'scheduled == cutoff is excluded');
+    expect(
+        (await db.upcomingPendingDoses(DateTime(2026, 11, 9, 9, 0), DateTime(2026, 11, 10)))
+            .map((d) => d.id),
+        [id], reason: 'scheduled == now is included');
+    expect(await db.upcomingPendingDoses(DateTime(2026, 11, 9, 9, 1), DateTime(2026, 11, 10)),
+        isEmpty, reason: 'scheduled < now is excluded');
+  });
+
+  test('ensureDose never duplicates or overwrites an answered dose', () async {
+    final medId = await addMed();
+    final id = await db.ensureDose(medId, DateTime(2026, 11, 9, 9, 0));
+    await db.setDoseStatus(id!, DoseStatus.taken, at: DateTime(2026, 11, 9, 9, 30));
+
+    // The conflict-ignored insert returns null on Android's sqflite and 0 on the
+    // FFI one; its value is unused -- what matters is the single, answered row.
+    await db.ensureDose(medId, DateTime(2026, 11, 9, 9, 0));
+    final all = await db.dosesBetween(DateTime(2026, 11, 9), DateTime(2026, 11, 10));
+    expect(all, hasLength(1));
+    expect(all.single.status, DoseStatus.taken);
+  });
+
+  test('setDoseFiredAt keeps the first ring time', () async {
+    final medId = await addMed();
+    final id = await db.ensureDose(medId, DateTime(2026, 11, 9, 9, 0));
+    await db.setDoseFiredAt(id!, DateTime(2026, 11, 9, 9, 0, 2));
+    await db.setDoseFiredAt(id, DateTime(2026, 11, 9, 9, 10, 2));
+
+    expect((await db.dose(id))?.firedAt, DateTime(2026, 11, 9, 9, 0, 2),
+        reason: 'a snoozed re-fire must not overwrite the first ring');
+  });
+
+  test('dailyAdherence counts a future dose as neither taken nor total', () async {
+    final medId = await addMed();
+    final now = DateTime.now();
+    // Midnight today is always in today's bucket, whatever time it is now.
+    final takenId = await db.ensureDose(medId, DateTime(now.year, now.month, now.day));
+    await db.setDoseStatus(takenId!, DoseStatus.taken);
+    final futureId = await db.ensureDose(medId, now.add(const Duration(hours: 1)));
+    expect(futureId, isNotNull);
+
+    final counts = await db.dailyAdherence(
+        now.subtract(const Duration(days: 1)), now.add(const Duration(days: 1)));
+
+    // The whole map: after 23:00 the future dose falls tomorrow, and it must
+    // not show up there either.
+    expect(counts, {DateTime(now.year, now.month, now.day): (taken: 1, total: 1)},
+        reason: 'a dose that has not come due yet must not be counted');
   });
 }

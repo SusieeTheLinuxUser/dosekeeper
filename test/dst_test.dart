@@ -41,4 +41,44 @@ void main() {
 
     expect(satMed.coversSlot(at), isTrue);
   });
+
+  test('slot keeps midnight and 23:59 on their own day, including December 31', () {
+    final midnight = DoseScheduler.slot(DateTime(2026, 12, 31), 0);
+    expect(
+      (midnight.year, midnight.month, midnight.day, midnight.hour, midnight.minute),
+      (2026, 12, 31, 0, 0),
+    );
+
+    final lastMinute = DoseScheduler.slot(DateTime(2026, 12, 31), 1439);
+    expect(
+      (lastMinute.year, lastMinute.month, lastMinute.day, lastMinute.hour, lastMinute.minute),
+      (2026, 12, 31, 23, 59),
+    );
+  });
+
+  test('slot lands on the leap day itself and the day after it', () {
+    final leap = DoseScheduler.slot(DateTime(2028, 2, 29), 540);
+    expect((leap.year, leap.month, leap.day, leap.hour), (2028, 2, 29, 9));
+
+    // slot() takes the day from the passed DateTime, so Feb 28 stays Feb 28.
+    final before = DoseScheduler.slot(DateTime(2028, 2, 28), 540);
+    expect((before.year, before.month, before.day, before.hour), (2028, 2, 28, 9));
+  });
+
+  test('a weekday-only med covers the first minutes after its own midnight', () {
+    // Monday, 9 Nov 2026, 00:30.
+    const monMed = Medication(id: 1, name: 'A', timesOfDay: [30], daysOfWeek: {1});
+
+    expect(monMed.coversSlot(DateTime(2026, 11, 9, 0, 30)), isTrue);
+    // Tuesday 00:30 is neither Tuesday's time nor Monday's.
+    expect(monMed.coversSlot(DateTime(2026, 11, 10, 0, 30)), isFalse);
+  });
+
+  test('coversSlot works across a month end and a leap day boundary', () {
+    const med = Medication(id: 1, name: 'A', timesOfDay: [540], daysOfWeek: Medication.everyDay);
+
+    expect(med.coversSlot(DateTime(2026, 3, 1, 9)), isTrue); // March 1 after a month end
+    expect(med.coversSlot(DateTime(2028, 2, 29, 9)), isTrue); // the leap day itself
+    expect(med.coversSlot(DateTime(2028, 3, 1, 9)), isTrue); // the day after it
+  });
 }
