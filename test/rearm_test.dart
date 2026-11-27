@@ -425,7 +425,9 @@ void main() {
     final counts = await db.dailyAdherence(
         now.subtract(const Duration(days: 1)), now.add(const Duration(days: 1)));
 
-    expect(counts[DateTime(now.year, now.month, now.day)], (taken: 1, total: 1),
-        reason: 'a dose that has not come due yet must not drag today down');
+    // The whole map: after 23:00 the future dose falls tomorrow, and it must
+    // not show up there either.
+    expect(counts, {DateTime(now.year, now.month, now.day): (taken: 1, total: 1)},
+        reason: 'a dose that has not come due yet must not be counted');
   });
 }

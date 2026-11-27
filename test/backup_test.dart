@@ -130,8 +130,9 @@ void main() {
       expect(
         () => Backup.decode(tampered((j) {
           final meds = j['medications'] as List<dynamic>;
-          (meds[1] as Map<String, dynamic>)['id'] =
-              (meds[0] as Map<String, dynamic>)['id'];
+          // Append a copy so every dose still points at a real medication:
+          // only the duplicate-id check can reject this file.
+          meds.add(Map<String, dynamic>.from(meds[0] as Map<String, dynamic>));
         })),
         throwsFormatException,
       );
