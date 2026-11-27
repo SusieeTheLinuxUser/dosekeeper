@@ -4,7 +4,7 @@ A medication reminder for Android that actually rings.
 
 Built after a commercial Bluetooth pill dispenser and its companion app silently
 failed to fire an alarm, causing a missed dose. This app deliberately owns nothing
-but your phone: no hardware, no account, no server, no network permission at all.
+but your phone: no hardware, no account, no server, and no network permission in release builds.
 
 ## Why it's built this way
 
@@ -39,9 +39,9 @@ See [dontkillmyapp.com](https://dontkillmyapp.com) for per-manufacturer steps.
 ## Features
 
 - Add medications with multiple times per day and per-weekday schedules
-- Full-screen ringing alarm with **Taken** / **Snooze 10 min**
+- Full-screen ringing alarm with **Taken** / **Snooze** (default 10 min; choose 5, 10, 15, or 30 min on the Info page)
 - Doses marked taken/skipped, with missed doses detected after a grace period
-- Everything stored locally in SQLite
+- Medications and dose history stored locally in SQLite
 
 - Persistent notification for any dose still outstanding past its grace period,
   until it's marked taken or skipped or you swipe the notification away
@@ -50,7 +50,7 @@ See [dontkillmyapp.com](https://dontkillmyapp.com) for per-manufacturer steps.
   and restore from a backup file
 - Optional Android Google backup, off unless you turn it on
 
-Planned: a dose history view, editing/pausing a medication without deleting it.
+Planned: a dose history view and the ability to pause a medication without deleting it. Editing medications is already supported.
 
 ## Building
 
