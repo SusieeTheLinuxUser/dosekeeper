@@ -304,6 +304,64 @@ void main() {
         reason: 'the 12h back-fill covers 16:00 (5h ago), not 08:00 (13h ago)');
   });
 
+  test('editing days out of a med cancels their doses but keeps the kept day',
+      () async {
+    final medId = await addMed(); // 09:00 daily
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0)); // a Monday
+    final tuesday =
+        (await db.dosesBetween(DateTime(2026, 11, 10), DateTime(2026, 11, 11))).single;
+    expect(armed.containsKey(tuesday.id), isTrue, reason: 'precondition: Tuesday armed');
+
+    await db.upsertMedication(Medication(
+        id: medId,
+        name: 'Test med',
+        timesOfDay: [540],
+        daysOfWeek: {1})); // Mondays only
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 30));
+
+    expect(cancelled, contains(tuesday.id), reason: 'Tuesday is no longer scheduled');
+    expect(await db.dose(tuesday.id!), isNull, reason: 'the unscheduled dose row is deleted');
+    expect(armed.keys, hasLength(1),
+        reason: 'only Monday Nov 9 stays armed -- none doubled, none left over');
+  });
+
+  test('duplicate and unsorted times never double a dose or its alarm', () async {
+    // Constructed unsorted with a duplicate -- the shape a hand-repaired backup
+    // row could arrive in. fromRow sorts and materialise is idempotent per
+    // instant, so the duplicate must collapse into one dose with one alarm.
+    await DoseDatabase.instance.upsertMedication(Medication(
+      name: 'Test med',
+      timesOfDay: const [600, 540, 540], // 10:00, 09:00, 09:00 again
+      daysOfWeek: Medication.everyDay,
+    ));
+    await scheduler.sync(now: DateTime(2026, 11, 9, 8, 0));
+
+    final day = await db.dosesBetween(DateTime(2026, 11, 10), DateTime(2026, 11, 11));
+    expect(day.map((d) => d.scheduledAt),
+        [DateTime(2026, 11, 10, 9, 0), DateTime(2026, 11, 10, 10, 0)],
+        reason: 'one dose per instant, in slot order, no 09:00 double');
+    expect(
+      armed.values.where((t) => t == ms(DateTime(2026, 11, 10, 9, 0))),
+      hasLength(1),
+      reason: 'one alarm for the duplicated 09:00 instant',
+    );
+  });
+
+  test('a midnight dose is armed the evening before, and 23:59 the same evening',
+      () async {
+    await addMed(timesOfDay: [0]); // 00:00
+    // Sunday evening: Monday 00:00 is 4h ahead and must already be armed, so
+    // the day rolling over cannot find it unarmed.
+    await scheduler.sync(now: DateTime(2026, 11, 8, 20, 0)); // Nov 8 is a Sunday
+    expect(armed.containsValue(ms(DateTime(2026, 11, 9, 0, 0))), isTrue,
+        reason: 'the midnight dose is armed before the day rolls over');
+
+    await addMed(timesOfDay: [1439]); // 23:59
+    await scheduler.sync(now: DateTime(2026, 11, 8, 20, 0));
+    expect(armed.containsValue(ms(DateTime(2026, 11, 8, 23, 59))), isTrue,
+        reason: 'a 23:59 dose the same evening is armed while still today');
+  });
+
   test('editing a time out of a med cancels its armed alarm and deletes the dose',
       () async {
     final medId = await addMed(timesOfDay: [540, 600]); // 09:00, 10:00
