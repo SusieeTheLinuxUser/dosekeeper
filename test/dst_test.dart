@@ -41,6 +41,8 @@ void main() {
     final at = DoseScheduler.slot(DateTime(2026, 10, 25), 150);
 
     expect(at.hour * 60 + at.minute, 150, reason: 'the wall clock stays 02:30');
+    expect(at.toUtc(), DateTime.utc(2026, 10, 25, 0, 30),
+        reason: 'the first 02:30 is CEST (UTC+2), i.e. 00:30 UTC');
     expect(med.coversSlot(at), isTrue);
     final fromDb = DateTime.fromMillisecondsSinceEpoch(at.millisecondsSinceEpoch);
     expect(med.coversSlot(fromDb), isTrue,
