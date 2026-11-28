@@ -701,26 +701,29 @@ done; what's next is judgment, not a fixed checklist:
   `~/.android/debug.keystore` matches the phone. A CI debug build has a different key and
   won't install, and the "fix" for that is the wipe.
   How `dev-1.1.8` was made (2026-11-08): bump `version:` by PR and merge; `git fetch origin`;
-  `git checkout --detach origin/master` with a clean tree (so the APK is built from the commit
-  the tag points at); fast-forward `dev` to it (`git push origin origin/master:refs/heads/dev`);
+  `git checkout --detach origin/dev` with a clean tree (so the APK is built from the commit
+  the tag points at; since 2026-11-28 `dev` is where PRs land, so it already has the changes);
   `flutter build apk --debug`;
   check the signer matches the previous dev APK (`apksigner verify --print-certs`, SHA-256
   `05cbd6a6…5fb4`); copy it to `dosekeeper-X.Y.Z-debug.apk`; `gh release create dev-X.Y.Z
-  --prerelease --target <full master SHA>` with that file (a short SHA is rejected).
+  --prerelease --target <full dev SHA>` with that file (a short SHA is rejected).
 
 ## Git workflow
 
 Remote: `https://github.com/SusieeTheLinuxUser/dosekeeper` (public, MIT).
 
-**`master` is branch-protected as of 2026-09-20:** PR required to merge, CI (`.github/workflows/ci.yml`:
-`flutter analyze` + `flutter test` + `flutter build apk --debug`) must pass, force-push and
-branch deletion blocked, enforced for admins too — so this applies even to the repo owner,
-not just outside contributors. Direct `git push origin <branch>:master` will be rejected.
+**Branches (since 2026-11-28):** `dev` is the default branch and where every change lands;
+`master` is prod (stable `v*.*.*` releases are tagged on it). A release is a PR from `dev` into
+`master`, merged with a merge commit. Both are protected by the ruleset "Protect dev and prod":
+PR required, CI (`.github/workflows/ci.yml`: `flutter analyze` + `flutter test` +
+`flutter build apk --debug`, check `build-and-test`) must pass, force-push and branch deletion
+blocked, no bypass, so this applies to the repo owner too. Direct pushes to `dev` or `master`
+are rejected.
 
 Normal flow for any change, agent or human:
-1. Branch off `master`: `git checkout -b <kind>/<short-description>`.
+1. Branch off `dev`: `git checkout -b <kind>/<short-description> origin/dev`.
 2. Commit, push: `git push -u origin <branch>`.
-3. `gh pr create --base master`.
+3. `gh pr create --base dev`.
 4. Wait for the CI check to pass on the PR.
 5. `gh pr merge --merge` (or ask the user to click merge on GitHub).
 
