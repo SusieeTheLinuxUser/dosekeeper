@@ -32,6 +32,35 @@ void main() {
     expect(gapMed.coversSlot(at), isTrue);
   });
 
+  test('a dose inside the fall-back repeated hour keeps its slot', () {
+    // Warsaw 2026-10-25: 03:00 -> 02:00, so 02:30 happens twice. slot() resolves to
+    // the first occurrence, and the instant must keep matching its slot through the
+    // database round-trip (fromMillisecondsSinceEpoch, what Dose.fromRow does), or the
+    // dose is rearmed an hour late on the second 02:30 -- or deleted as an orphan.
+    const med = Medication(id: 1, name: 'A', timesOfDay: [150], daysOfWeek: Medication.everyDay);
+    final at = DoseScheduler.slot(DateTime(2026, 10, 25), 150);
+
+    expect(at.hour * 60 + at.minute, 150, reason: 'the wall clock stays 02:30');
+    expect(med.coversSlot(at), isTrue);
+    final fromDb = DateTime.fromMillisecondsSinceEpoch(at.millisecondsSinceEpoch);
+    expect(med.coversSlot(fromDb), isTrue,
+        reason: 'the stored instant still matches its slot');
+    expect(fromDb.millisecondsSinceEpoch, at.millisecondsSinceEpoch,
+        reason: 'no hour lost or gained storing the instant');
+  });
+
+  test('occursOn maps ISO weekdays with no off-by-one across the whole week', () {
+    // Nov 9 2026 is a Monday, so Nov 9..15 walk Monday..Sunday.
+    for (var medDay = 1; medDay <= 7; medDay++) {
+      final med = Medication(id: 1, name: 'A', timesOfDay: [540], daysOfWeek: {medDay});
+      for (var day = 0; day < 7; day++) {
+        final date = DateTime(2026, 11, 9 + day);
+        expect(med.occursOn(date), date.weekday == medDay,
+            reason: 'med on ISO day $medDay vs ${date.weekday} of $date');
+      }
+    }
+  });
+
   test('a late slot pushed past midnight by the gap still matches its slot', () {
     // Only in a zone whose gap starts at 23:00, e.g. TZ=America/Nuuk on 2026-03-28.
     final saturday = DateTime(2026, 3, 28);
